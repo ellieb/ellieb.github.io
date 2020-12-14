@@ -208,20 +208,20 @@ function updateVoxelCoords (
     const worldCoords = coordsToWorld(coords, axis, sliceNum, vol, transform)
     const voxelCoords = coordsToVoxel(coords, axis, sliceNum, vol, transform)
 
-    // Update voxel info if checkbox is checked
-    if (d3.select("input[name='show-marker-checkbox']").node().checked) {
-      updateWorldLabels(worldCoords, id)
-      updateVoxelLabels(voxelCoords, id)
-      updateVoxelInfo(voxelCoords, densityVol, doseVol, id)
-    }
+    // // Update voxel info if checkbox is checked
+    // if (d3.select("input[name='show-marker-checkbox']").node().checked) {
+    //   updateWorldLabels(worldCoords, id)
+    //   updateVoxelLabels(voxelCoords, id)
+    //   updateVoxelInfo(voxelCoords, densityVol, doseVol, id)
+    // }
 
-    // Update dose profiles if checkbox is checked
-    if (
-      doseVol &&
-      d3.select("input[name='show-dose-profile-checkbox']").node().checked
-    ) {
-      updateDoseProfiles(voxelCoords, worldCoords)
-    }
+    // // Update dose profiles if checkbox is checked
+    // if (
+    //   doseVol &&
+    //   d3.select("input[name='show-dose-profile-checkbox']").node().checked
+    // ) {
+    //   updateDoseProfiles(voxelCoords, worldCoords)
+    // }
   }
 }
 

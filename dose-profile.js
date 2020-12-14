@@ -63,8 +63,8 @@ class DoseProfile {
     this.svg.select('rect.bounding-box').call(this.zoomObj)
 
     // Check if the plot density checkbox is selected
-    this.densityChecked = () =>
-      d3.select("input[name='density-profile-checkbox']").node().checked
+    this.densityChecked = () => false
+    // d3.select("input[name='density-profile-checkbox']").node().checked
 
     // Initialize all properties
     this.xScale = null

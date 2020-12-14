@@ -81,10 +81,10 @@ class Panel {
     this.markerPosition = markerPosition
 
     // Properties to check values of voxel and dose profile checkboxes
-    this.showMarker = () =>
-      d3.select("input[name='show-marker-checkbox']").node().checked
-    this.showCrosshairs = () =>
-      d3.select("input[name='show-dose-profile-checkbox']").node().checked
+    this.showMarker = () => false
+    // d3.select("input[name='show-marker-checkbox']").node().checked
+    this.showCrosshairs = () => false
+    // d3.select("input[name='show-dose-profile-checkbox']").node().checked
 
     // Update circle marker position and voxel coords on click
     const panel = this

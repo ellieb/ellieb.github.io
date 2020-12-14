@@ -318,13 +318,13 @@ class DoseVolume extends Volume {
       this.drawDose(this.prevSlice[axis], panels[axis].zoomTransform)
     )
 
-    if (d3.select("input[name='show-dose-profile-checkbox']").node().checked) {
-      volumeViewerList.forEach((volumeViewer) => {
-        volumeViewer.doseProfileList.forEach((doseProfile) =>
-          doseProfile.plotData()
-        )
-      })
-    }
+    // if (d3.select("input[name='show-dose-profile-checkbox']").node().checked) {
+    //   volumeViewerList.forEach((volumeViewer) => {
+    //     volumeViewer.doseProfileList.forEach((doseProfile) =>
+    //       doseProfile.plotData()
+    //     )
+    //   })
+    // }
   }
 
   /**
