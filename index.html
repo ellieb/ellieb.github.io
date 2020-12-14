@@ -1,0 +1,134 @@
+<!--
+###############################################################################
+#
+#  EGSnrc online voxel and dose visualization tool
+#  Copyright (C) 2020 Magdalena Bazalova-Carter and Elise Badun
+#
+#  This file is part of EGSnrc.
+#
+#  EGSnrc is free software: you can redistribute it and/or modify it under
+#  the terms of the GNU Affero General Public License as published by the
+#  Free Software Foundation, either version 3 of the License, or (at your
+#  option) any later version.
+#
+#  EGSnrc is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for
+#  more details.
+#
+#  You should have received a copy of the GNU Affero General Public License
+#  along with EGSnrc. If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+#
+#  Author:          Elise Badun, 2020
+#
+#  Contributors:
+#
+###############################################################################
+-->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>UVic Dose Dig</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://x3dom.org/download/dev/x3dom-full.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://raw.githack.com/jamesleesaunders/d3-x3d/master/dist/d3-x3d.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.js"></script>
+    <script async src="http://cdn.jsdelivr.net/g/filesaver.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/dicom-parser@1.8.7/dist/dicomParser.min.js"></script>
+    <!-- <script async src="https://unpkg.com/cornerstone-core/dist/cornerstone.min.js"></script>
+    <script src="../pako.min.js"></script> -->
+  </head>
+  <body>
+    <div class="header">
+      <h1>UVic Dose Dig</h1>
+      <img src="./images/logo.jpg" alt="XCITE Lab logo" />
+    </div>
+    <p class="description">Upload your own .egsphant, .3ddose, or .dcm files.</p>
+    <div id="drop-area">
+      <p>
+        Drop or select one or more .egsphant, .3ddose, or .dcm files or use existing
+        <button id="test-files" class="link-appearance">test files</button>.
+      </p>
+      <input type="file" id="file-input" multiple accept=".egsphant, .3ddose, .dcm, .DCM" />
+      <br />
+      <progress id="progress-bar" max="100" value="0" class="hidden"></progress>
+    </div>
+              <!-- <div>
+        <label for="folder-input" class="btn">Choose Folder</label>
+        <input type="file" id="folder-input" multiple accept=".egsphant, .3ddose,
+      .dcm, .DCM" directory="" webkitdirectory="" moxdirectory=""/>
+      </div>
+      <br /> -->
+    <div id="dose-viewer-container" class="container">
+      <span id="dose-viewer-info-container" class="container">
+        <div id="axis-slider-container"></div>
+      </span>
+      <span class="container">
+        <button id="save-vis" disabled>Export visualization to PNG</button>
+        <br />
+        <button id="save-dose-profile" disabled>
+          Export dose profiles to CSV
+        </button>
+        <br />
+        <input
+          type="checkbox"
+          id="show-marker-checkbox"
+          name="show-marker-checkbox"
+          value="ShowMarker"
+          disabled
+        />
+        <label for="show-marker-checkbox">
+          Show voxel information on click?
+        </label>
+        <br />
+        <br />
+        <input
+          type="checkbox"
+          id="show-dose-profile-checkbox"
+          name="show-dose-profile-checkbox"
+          value="ShowDoseProfile"
+          disabled
+        />
+        <label for="show-dose-profile-checkbox">
+          Plot dose profile at crosshairs?
+        </label>
+        <br />
+
+        <input
+          type="checkbox"
+          id="density-profile-checkbox"
+          name="density-profile-checkbox"
+          value="PlotDensity"
+          style="display: none"
+          disabled
+        />
+        <label for="density-profile-checkbox" style="display: none">
+          Plot density?
+        </label>
+        <br />
+      </span>
+      <div id="image-to-print"></div>
+      <button id="add-volume-viewer" style="display: none">
+        Add new volume viewer
+      </button>
+    </div>
+    <script type="module" src="./index.js"></script>
+    <script type="module" src="./volume.js"></script>
+    <script type="module" src="./dose-profile.js"></script>
+    <script type="module" src="./zoom.js"></script>
+    <script type="module" src="./panel.js"></script>
+    <script type="module" src="./slider.js"></script>
+    <script type="module" src="./voxel-coordinates.js"></script>
+    <script type="module" src="./volume-viewer.js"></script>
+    <script type="module" src="./min-max-density-slider.js"></script>
+    <script type="module" src="./file-upload.js"></script>
+    <script type="module" src="./export.mjs"></script>
+    <script type="module" src="./read-data.js"></script>
+    <script type="module" src="./checkbox-button-helper.js"></script>
+  </body>
+</html>
