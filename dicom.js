@@ -117,6 +117,8 @@ function combineDICOMDensityData (DICOMList) {
 
 // TODO: Change object name to keyword
 const elementProperties = {
+  // // Modality
+  // x00080060: { tag: '(0008,0060)', type: '1', keyword: 'Modality', vm: 1, vr: 'CS' }, // Institution-generated description or classification of the study
   // General Study
   x00081030: { tag: '(0008,1030)', type: '3', keyword: 'StudyDescription', vm: 1, vr: 'LO' }, // Institution-generated description or classification of the study
   // General Series
@@ -182,10 +184,21 @@ var getVal = function (dataSet, vr, propertyAddress) {
     var dataElement = dataSet.elements[propertyAddress]
     const bitsAllocated = dataSet.uint16('x00280100')
 
+    // If the offset is not divisible the the byte number, slice the buffer
     if (bitsAllocated === 16) {
-      val = new Uint16Array(dataSet.byteArray.buffer, dataElement.dataOffset, dataElement.length / 2)
+      const arrayLength = dataElement.length / Uint16Array.BYTES_PER_ELEMENT
+      if ((dataElement.dataOffset % Uint16Array.BYTES_PER_ELEMENT) === 0) {
+        val = new Uint16Array(dataSet.byteArray.buffer, dataElement.dataOffset, arrayLength)
+      } else {
+        val = new Uint16Array(dataSet.byteArray.buffer.slice(dataElement.dataOffset), 0, arrayLength)
+      }
     } else if (bitsAllocated === 32) {
-      val = new Uint32Array(dataSet.byteArray.buffer, dataElement.dataOffset, dataElement.length / 4)
+      const arrayLength = dataElement.length / Uint32Array.BYTES_PER_ELEMENT
+      if ((dataElement.dataOffset % Uint32Array.BYTES_PER_ELEMENT) === 0) {
+        val = new Uint32Array(dataSet.byteArray.buffer, dataElement.dataOffset, arrayLength)
+      } else {
+        val = new Uint32Array(dataSet.byteArray.buffer.slice(dataElement.dataOffset), 0, arrayLength)
+      }
     } else {
       console.log('Unknown bits allocated')
     }
@@ -203,10 +216,6 @@ var getVal = function (dataSet, vr, propertyAddress) {
 
 function processDICOMSlice (arrayBuffer) {
   const byteArray = new Uint8Array(arrayBuffer)
-  var kb = byteArray.length / 1024
-  var mb = kb / 1024
-  var byteStr = mb > 1 ? mb.toFixed(3) + ' MB' : kb.toFixed(0) + ' KB'
-  console.log('Status: Parsing ' + byteStr + ' bytes, please wait..')
 
   try {
     const dataSet = dicomParser.parseDicom(byteArray, { untilTag: 'x7fe00010' })

@@ -230,12 +230,12 @@ class VolumeViewer {
       }
     })
 
-    // if (this.densityVolume) {
-    //   enableCheckboxForDensityPlot()
-    // }
-    // enableCheckboxForDoseProfilePlot()
-    // enableExportVisualizationButton()
-    // enableCheckboxForVoxelInformation()
+    if (this.densityVolume) {
+      enableCheckboxForDensityPlot()
+    }
+    enableCheckboxForDoseProfilePlot()
+    enableExportVisualizationButton()
+    enableCheckboxForVoxelInformation()
   }
 
   /**
@@ -295,10 +295,10 @@ class VolumeViewer {
       }
     })
 
-    // if (this.doseVolume) {
-    //   enableCheckboxForDensityPlot()
-    // }
-    // enableExportVisualizationButton()
+    if (this.doseVolume) {
+      enableCheckboxForDensityPlot()
+    }
+    enableExportVisualizationButton()
     // TODO: Move this outside volume viewer and assume all loaded egsphants
     // have same density range
     initializeMinMaxDensitySlider(
@@ -308,7 +308,7 @@ class VolumeViewer {
       this.panels
     )
 
-    // enableCheckboxForVoxelInformation()
+    enableCheckboxForVoxelInformation()
   }
 
   /**
@@ -808,13 +808,11 @@ class VolumeViewer {
     })
 
     this.dispatch.on('markerchange.voxelinfo', function (d) {
+      const worldCoords = d.panel.coordsToWorld(d.plotCoords)
       updateVoxelCoords(
         d.panel.densityVol,
         d.panel.doseVol,
-        d.plotCoords,
-        d.panel.axis,
-        d.panel.sliceNum,
-        d.panel.zoomTransform,
+        worldCoords,
         d.panel.volumeViewerId
       )
     })
