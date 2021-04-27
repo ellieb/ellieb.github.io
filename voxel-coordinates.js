@@ -31,7 +31,10 @@
 // definitions for StandardJS formatter
 /* global d3 */
 
-import { volumeViewerList } from './index.js'
+// REMOVE THESE GLOBAL IMPORTS ONCE MODULES RE-IMPLEMENTED
+/* global volumeViewerList */
+
+// import { volumeViewerList } from './index.js'
 
 // TODO: Make voxel information a class
 /**
@@ -39,8 +42,9 @@ import { volumeViewerList } from './index.js'
  *
  * @param {Object} parentDiv The HTML parent div.
  * @param {string} id The unique ID of the volume viewers voxel info.
+ * @returns {Object}
  */
-function buildVoxelInfoHtml (parentDiv, id) {
+function buildVoxelInfoHtml (parentDiv, id) { // eslint-disable-line no-unused-vars
   // Define label texts and tags
   const labelName = [
     'World Coordinates (cm):',
@@ -78,6 +82,8 @@ function buildVoxelInfoHtml (parentDiv, id) {
       .attr('class', 'voxel-info-output')
       .attr('id', tag + '-' + id)
   })
+
+  return voxelInfoHolder
 }
 
 /**
@@ -90,13 +96,14 @@ function buildVoxelInfoHtml (parentDiv, id) {
  * @param {Object} transform The zoom transform of the panel.
  * @returns {number[]}
  */
-function coordsToVoxel (coords, axis, sliceNum, volume, transform) {
-  // Invert transformation if applicable then apply scale to get voxel coordinate
-  const i = volume.prevSlice[axis].xPixelToVoxelScale(
-    transform ? invertTransform(coords[0], transform, 'x') : coords[0]
+function coordsToVoxel (coords, axis, sliceNum, volume, transform) { // eslint-disable-line no-unused-vars
+  // Invert transformation if applicable then apply scale to get voxel
+  // coordinate
+  const i = volume.baseSlices[axis].xPixelToVoxelScale(
+    transform ? transform.invertX(coords[0]) : coords[0]
   )
-  const j = volume.prevSlice[axis].yPixelToVoxelScale(
-    transform ? invertTransform(coords[1], transform, 'y') : coords[1]
+  const j = volume.baseSlices[axis].yPixelToVoxelScale(
+    transform ? transform.invertY(coords[1]) : coords[1]
   )
   const k = parseInt(sliceNum)
 
@@ -130,19 +137,6 @@ function updateVoxelLabels (coords, id) {
 }
 
 /**
- * Invert the zoom transform to get the coordinates as if no transformation had
- * been applied.
- *
- * @param {number} val The value to invert.
- * @param {Object} transform The zoom transform to reverse.
- * @param {string} dir The direction of the zoom transform (x or y) to reverse.
- * @returns {number}
- */
-function invertTransform (val, transform, dir) {
-  return (val - transform[dir]) / transform.k
-}
-
-/**
  * Update the voxel coordinates and dose profiles.
  *
  * @param {DensityVolume} densityVol The density volume of the volume viewer.
@@ -150,19 +144,24 @@ function invertTransform (val, transform, dir) {
  * @param {number[]} worldCoords The world coordinates.
  * @param {string} id The unique ID of the volume viewers voxel info.
  */
-function updateVoxelCoords (
+function updateVoxelCoords ( // eslint-disable-line no-unused-vars
   densityVol,
   doseVol,
   worldCoords,
-  id
+  id,
+  showMarker,
+  showDoseProfile
 ) {
   const vol = densityVol || doseVol
   const densityVoxelCoords = densityVol ? densityVol.worldToVoxelCoords(worldCoords) : null
   const doseVoxelCoords = doseVol ? doseVol.worldToVoxelCoords(worldCoords) : null
+  const volumeViewer = volumeViewerList[id.substring(4)]
+
+  volumeViewer.worldCoords = worldCoords
 
   if (vol) {
     // Update voxel info if checkbox is checked
-    if (d3.select("input[name='show-marker-checkbox']").node().checked) {
+    if (showMarker()) {
       updateWorldLabels(worldCoords, id)
       updateVoxelLabels(densityVoxelCoords || doseVoxelCoords, id)
       updateVoxelInfo(worldCoords, densityVol, doseVol, densityVoxelCoords, doseVoxelCoords, id)
@@ -170,10 +169,9 @@ function updateVoxelCoords (
 
     // Update dose profiles if checkbox is checked
     if (
-      doseVol &&
-      d3.select("input[name='show-dose-profile-checkbox']").node().checked
+      doseVol && showDoseProfile()
     ) {
-      updateDoseProfiles(doseVoxelCoords, worldCoords)
+      updateDoseProfiles(doseVoxelCoords, worldCoords, id)
     }
   }
 }
@@ -198,7 +196,7 @@ function updateVoxelInfo (worldCoords, densityVol, doseVol, densityVoxelCoords, 
   }
 
   if (doseVol) {
-    const dose = doseVol.getDataAtVoxelCoords(doseVoxelCoords) || 0
+    const dose = doseVol.getDataAtVoxelCoords(doseVoxelCoords) / doseVol.data.maxDose || 0
     const error = doseVol.getErrorAtVoxelCoords(doseVoxelCoords) || 0
     d3.select('#dose-value-' + id).node().value =
       d3.format('.1%')(dose) + ' \u00B1 ' + d3.format('.1%')(error)
@@ -210,8 +208,9 @@ function updateVoxelInfo (worldCoords, densityVol, doseVol, densityVoxelCoords, 
  *
  * @param {number[]} voxelCoords The voxel coordinates of the data.
  * @param {number[]} worldCoords The world coordinates of the data.
+ * @param {number} id The id of the volume viewer to update the dose profile.
  */
-function updateDoseProfiles (voxelCoords, worldCoords) {
+function updateDoseProfiles (voxelCoords, worldCoords, id) {
   var getCoords = (coords) => [
     [coords[0], coords[1]],
     [coords[1], coords[2]],
@@ -222,22 +221,26 @@ function updateDoseProfiles (voxelCoords, worldCoords) {
   const worldCoordsList = getCoords(worldCoords)
   const dimensionsList = ['z', 'x', 'y']
 
-  volumeViewerList.forEach((volumeViewer) => {
-    volumeViewer.doseProfileList.forEach((doseProfile, i) => {
-      if (volumeViewer.doseVolume) {
-        // Set the data
-        doseProfile.setDoseProfileData(
-          volumeViewer.doseVolume,
-          volumeViewer.densityVolume,
-          dimensionsList[i],
-          voxelCoordsList[i]
-        )
+  const volumeViewer = volumeViewerList[id.substring(4)]
+  volumeViewer.doseProfileList.forEach((doseProfile, i) => {
+    if (volumeViewer.doseVolume) {
+      // Set the data
+      doseProfile.setDoseProfileData(
+        volumeViewer.doseVolume,
+        volumeViewer.densityVolume,
+        dimensionsList[i],
+        voxelCoordsList[i],
+        volumeViewer.minDoseVar,
+        volumeViewer.maxDoseVar
+      )
 
-        // Plot the dose profile
-        doseProfile.plotDoseProfile(worldCoordsList[i])
-      }
-    })
+      // Update the dose profile axes
+      doseProfile.updateAxes()
+
+      // Plot the dose profile
+      doseProfile.plotDoseProfile(worldCoordsList[i])
+    }
   })
 }
 
-export { buildVoxelInfoHtml, coordsToVoxel, invertTransform, updateVoxelCoords }
+// export { buildVoxelInfoHtml, coordsToVoxel, updateVoxelCoords }

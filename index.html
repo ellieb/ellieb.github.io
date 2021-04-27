@@ -31,17 +31,15 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
     <title>UVic Dose Dig</title>
     <script src="https://d3js.org/d3.v5.min.js"></script>
-    <script src="https://x3dom.org/download/dev/x3dom-full.js"></script>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://raw.githack.com/jamesleesaunders/d3-x3d/master/dist/d3-x3d.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.js"></script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.js"></script>
     <script async src="http://cdn.jsdelivr.net/g/filesaver.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
     <script async src="https://cdn.jsdelivr.net/npm/dicom-parser@1.8.7/dist/dicomParser.min.js"></script>
-    <!-- <script async src="https://unpkg.com/cornerstone-core/dist/cornerstone.min.js"></script>
-    <script src="../pako.min.js"></script> -->
   </head>
   <body>
     <div class="header">
@@ -58,47 +56,8 @@
       <br />
       <progress id="progress-bar" max="100" value="0" class="hidden"></progress>
     </div>
-              <!-- <div>
-        <label for="folder-input" class="btn">Choose Folder</label>
-        <input type="file" id="folder-input" multiple accept=".egsphant, .3ddose,
-      .dcm, .DCM" directory="" webkitdirectory="" moxdirectory=""/>
-      </div>
-      <br /> -->
     <div id="dose-viewer-container" class="container">
-      <span id="dose-viewer-info-container" class="container">
-        <div id="axis-slider-container"></div>
-      </span>
       <span class="container">
-        <button id="save-vis" disabled>Export visualization to PNG</button>
-        <br />
-        <button id="save-dose-profile" disabled>
-          Export dose profiles to CSV
-        </button>
-        <br />
-        <input
-          type="checkbox"
-          id="show-marker-checkbox"
-          name="show-marker-checkbox"
-          value="ShowMarker"
-          disabled
-        />
-        <label for="show-marker-checkbox">
-          Show voxel information on click?
-        </label>
-        <br />
-        <br />
-        <input
-          type="checkbox"
-          id="show-dose-profile-checkbox"
-          name="show-dose-profile-checkbox"
-          value="ShowDoseProfile"
-          disabled
-        />
-        <label for="show-dose-profile-checkbox">
-          Plot dose profile at crosshairs?
-        </label>
-        <br />
-
         <input
           type="checkbox"
           id="density-profile-checkbox"
@@ -113,22 +72,31 @@
         <br />
       </span>
       <div id="image-to-print"></div>
-      <button id="add-volume-viewer" style="display: none">
+      <button id="add-volume-viewer">
         Add new volume viewer
       </button>
     </div>
-    <script type="module" src="./index.js"></script>
-    <script type="module" src="./volume.js"></script>
-    <script type="module" src="./dose-profile.js"></script>
-    <script type="module" src="./zoom.js"></script>
-    <script type="module" src="./panel.js"></script>
-    <script type="module" src="./slider.js"></script>
-    <script type="module" src="./voxel-coordinates.js"></script>
-    <script type="module" src="./volume-viewer.js"></script>
-    <script type="module" src="./min-max-density-slider.js"></script>
-    <script type="module" src="./file-upload.js"></script>
-    <script type="module" src="./export.mjs"></script>
-    <script type="module" src="./read-data.js"></script>
-    <script type="module" src="./checkbox-button-helper.js"></script>
+    <script type="text/javascript" src="./cache-worker.mjs"></script>
+    <script type="text/javascript" src="./index.js"></script>
+    <script type="text/javascript" src="./sliders/slider.js"></script>
+    <script type="text/javascript" src="./sliders/min-max-density-slider.js"></script>
+    <script type="text/javascript" src="./sliders/max-dose-slider.js"></script>
+    <script type="text/javascript" src="./sliders/dose-comp-normalization-slider.js"></script>
+    <script type="text/javascript" src="./read-data.js"></script>
+    <script type="text/javascript" src="./export.mjs"></script>
+    <script type="text/javascript" src="./volumes/volume.js"></script>
+    <script type="text/javascript" src="./volumes/density-volume.js"></script>
+    <script type="text/javascript" src="./volumes/dose-comparison-volume.js"></script>
+    <script type="text/javascript" src="./volumes/dose-volume.js"></script>
+    <script type="text/javascript" src="./volumes/structure-set-volume.js"></script>
+    <script type="text/javascript" src="./zoom.js"></script>
+    <script type="text/javascript" src="./dose-profile.js"></script>
+    <script type="text/javascript" src="./dose-volume-histogram.js"></script>
+    <script type="text/javascript" src="./voxel-coordinates.js"></script>
+    <script type="text/javascript" src="./panel.js"></script>
+    <script type="text/javascript" src="./volume-viewer.js"></script>
+    <script type="text/javascript" src="./checkbox-button-helper.js"></script>
+    <script type="text/javascript" src="./dicom.js"></script>
+    <script type="text/javascript" src="./file-upload.js"></script>
   </body>
 </html>

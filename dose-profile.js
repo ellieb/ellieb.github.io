@@ -30,12 +30,14 @@
 
 // definitions for StandardJS formatter
 /* global d3 */
-/* global doseProfileAxis */
-import { getZoom, zoomedDoseProfile } from './zoom.js'
-import { DOSE_PROFILE_DIMENSIONS } from './index.js'
+
+// REMOVE THESE GLOBAL IMPORTS ONCE MODULES RE-IMPLEMENTED
+/* global DOSE_PROFILE_DIMENSIONS */
+
+// import { DOSE_PROFILE_DIMENSIONS } from './index.js'
 
 /** @class DoseProfile contains all information to build a dose profile at a line through a dose volume. */
-class DoseProfile {
+class DoseProfile { // eslint-disable-line no-unused-vars
   /**
    * Creates an instance of DoseProfile.
    *
@@ -52,12 +54,14 @@ class DoseProfile {
     this.buildSvg(dimensions, parentDiv, id)
 
     // Set up zoom object
-    this.zoomObj = getZoom(
-      dimensions.width,
-      dimensions.height,
-      zoomedDoseProfile,
-      [this]
-    )
+    this.zoomObj = d3
+      .zoom()
+      .extent([
+        [0, 0],
+        [dimensions.width, dimensions.height]
+      ])
+      .scaleExtent([1, 8])
+      .on('zoom', () => this.zoomedDoseProfile(d3.event.transform))
 
     // Enable zooming
     this.svg.select('rect.bounding-box').call(this.zoomObj)
@@ -75,20 +79,8 @@ class DoseProfile {
     this.doseVol = null
     this.yTicks = 6
     this.profileDim = null
-  }
-
-  /**
-   * Set the transform variable used for zooming.
-   */
-  set zoomTransform (val) {
-    this.transform = val
-  }
-
-  /**
-   * Get the transform variable used for zooming.
-   */
-  get zoomTransform () {
-    return this.transform
+    this.minDoseVar = null
+    this.maxDoseVar = null
   }
 
   /**
@@ -139,21 +131,49 @@ class DoseProfile {
   }
 
   /**
-   * Initializes the zoom of the dose profile plot using functions from the zoom file.
+   * The zoom callback function for dose profiles.
+   *
+   * @param {Object} transform The zoom transform object.
    */
-  initializeZoom () {
-    // Zooming for dose profile
-    doseProfileAxis.zoomObj = getZoom(
-      DOSE_PROFILE_DIMENSIONS.width,
-      DOSE_PROFILE_DIMENSIONS.height,
-      zoomedDoseProfile,
-      [doseProfileAxis]
-    )
+  zoomedDoseProfile (transform) {
+    this.svg
+      .selectAll('path.lines')
+      .attr('transform', transform.toString())
 
-    // Enable zooming
-    doseProfileAxis.svg
-      .select('rect.bounding-box')
-      .call(doseProfileAxis.zoomObj)
+    // Create new scale objects based on event
+    var newXScale = transform.rescaleX(this.xScale)
+    var newYDoseScale = transform.rescaleY(this.yDoseScale)
+
+    // Update axes
+    this.svg
+      .select('.profile-x-axis')
+      .call(
+        d3.axisBottom().scale(newXScale).tickSize(-this.dimensions.height)
+      )
+
+    this.svg
+      .select('.profile-y-dose-axis')
+      .call(
+        d3
+          .axisLeft()
+          .scale(newYDoseScale)
+          .ticks(this.yTicks)
+          .tickFormat(d3.format('.0%'))
+          .tickSize(-this.dimensions.width)
+      )
+
+    if (this.densityChecked()) {
+      var newYDensityScale = transform.rescaleY(this.yDensityScale)
+      this.svg
+        .select('.profile-y-density-axis')
+        .call(
+          d3
+            .axisLeft()
+            .scale(newYDensityScale)
+            .ticks(this.yTicks)
+            .tickSize(-this.dimensions.width)
+        )
+    }
   }
 
   /**
@@ -171,9 +191,11 @@ class DoseProfile {
    * @param {DoseVolume} doseVol        The dose volume object.
    * @param {DensityVolume} densityVol  The density volume object (fine if undefined, only used if density checkbox is checked).
    * @param {String} profileDim         The dimension (x, y, z) of the dose profile.
-   * @param {number[]} coords              The voxel position of the line through the volumes.
+   * @param {number[]} coords           The voxel position of the line through the volumes.
+   * @param {number} minDoseVar         The minimum dose to scale the dose profiles with.
+   * @param {number} maxDoseVar         The maximum dose to scale the dose profiles with.
    */
-  setDoseProfileData (doseVol, densityVol, profileDim, coords) {
+  setDoseProfileData (doseVol, densityVol, profileDim, coords, minDoseVar, maxDoseVar) {
     const [dim1, dim2, dim3] =
       profileDim === 'x'
         ? ['x', 'y', 'z']
@@ -229,6 +251,8 @@ class DoseProfile {
     this.data = doseProfileData
     this.doseVol = doseVol
     this.profileDim = profileDim
+    this.minDoseVar = minDoseVar
+    this.maxDoseVar = maxDoseVar
   }
 
   /**
@@ -252,7 +276,7 @@ class DoseProfile {
 
     this.yDoseScale = d3
       .scaleLinear()
-      .domain([0, 1.0])
+      .domain([this.minDoseVar >= 0 ? 0 : -1.0, 1.0])
       .range([this.dimensions.height, 0])
 
     if (this.densityChecked()) {
@@ -409,8 +433,8 @@ class DoseProfile {
     const data = this.data
     const preYDoseScale = d3
       .scaleLinear()
-      .domain([0, this.doseVol.maxDoseVar * 1.1])
-      .range([0, 1.1])
+      .domain([this.minDoseVar, this.maxDoseVar * 1.1])
+      .range([this.minDoseVar >= 0 ? 0 : -1.0, 1.1])
 
     // Clear all existing elements
     this.svg.selectAll('.plotting-area').remove()
@@ -507,13 +531,9 @@ class DoseProfile {
    */
   // TODO: Either combine this with getting the data or pass it in to reduce confusion
   plotDoseProfile (coords) {
-    if (this.xScale === null) {
-      this.updateAxes()
-    }
-
     this.makeTitle(coords)
     this.plotData()
   }
 }
 
-export { DoseProfile }
+// export { DoseProfile }

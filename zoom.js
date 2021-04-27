@@ -31,7 +31,10 @@
 // definitions for StandardJS formatter
 /* global d3 */
 
-import { MAIN_VIEWER_DIMENSIONS } from './index.js'
+// REMOVE THESE GLOBAL IMPORTS ONCE MODULES RE-IMPLEMENTED
+/* global MAIN_VIEWER_DIMENSIONS */
+
+// import { MAIN_VIEWER_DIMENSIONS } from './index.js'
 
 /**
  * Builds a zoom object according to the specs and callback passed in.
@@ -43,7 +46,7 @@ import { MAIN_VIEWER_DIMENSIONS } from './index.js'
  * @param {Array} args Any arguments to be passed into zoomCallback.
  * @returns {Object}
  */
-var getZoom = (width, height, zoomCallback, args) =>
+var getZoom = (width, height, zoomCallback, args) => // eslint-disable-line no-unused-vars
   d3
     .zoom()
     .extent([
@@ -54,72 +57,25 @@ var getZoom = (width, height, zoomCallback, args) =>
     .on('zoom', () => zoomCallback(d3.event.transform, ...args))
 
 /**
- * The zoom callback function for dose profiles.
- *
- * @param {Object} transform The zoom transform object.
- * @param {DoseProfile} doseProfile The dose profile to be zoomed.
- */
-function zoomedDoseProfile (transform, doseProfile) {
-  doseProfile.zoomTransform = transform
-  doseProfile.svg
-    .selectAll('path.lines')
-    .attr('transform', transform.toString())
-
-  // Create new scale objects based on event
-  var newxScale = transform.rescaleX(doseProfile.xScale)
-  var newyDoseScale = transform.rescaleY(doseProfile.yDoseScale)
-
-  // Update axes
-  doseProfile.svg
-    .select('.profile-x-axis')
-    .call(
-      d3.axisBottom().scale(newxScale).tickSize(-doseProfile.dimensions.height)
-    )
-
-  doseProfile.svg
-    .select('.profile-y-dose-axis')
-    .call(
-      d3
-        .axisLeft()
-        .scale(newyDoseScale)
-        .ticks(doseProfile.yTicks)
-        .tickFormat(d3.format('.0%'))
-        .tickSize(-doseProfile.dimensions.width)
-    )
-
-  if (doseProfile.densityChecked()) {
-    var newyDensityScale = transform.rescaleY(doseProfile.yDensityScale)
-    doseProfile.svg
-      .select('.profile-y-density-axis')
-      .call(
-        d3
-          .axisLeft()
-          .scale(newyDensityScale)
-          .ticks(doseProfile.yTicks)
-          .tickSize(-doseProfile.dimensions.width)
-      )
-  }
-}
-
-/**
  * The zoom callback function for the density plots.
  *
  * @param {Object} transform The zoom transform object.
  * @param {DensityProfile} densityVol The density profile to be zoomed.
+ * @param {Object} sliceImg The image of the slice to be zoomed.
  * @param {Object} canvas The canvas element to be zoomed.
  * @param {string} axis The axis of the slice to be zoomed.
  */
-function zoomedCanvas (transform, densityVol, canvas, axis) {
+function zoomedCanvas (transform, densityVol, sliceImg, canvas, axis) {
   // Get the image to draw
-  const image = densityVol.prevSliceImg[axis]
+  const baseSlice = densityVol.baseSlices[axis]
   const context = canvas.node().getContext('2d')
 
   // Clear the canvas, apply transformations, and redraw
-  context.clearRect(0, 0, canvas.node().width, canvas.node().height)
   context.save()
+  context.clearRect(0, 0, canvas.node().width, canvas.node().height)
   context.translate(transform.x, transform.y)
   context.scale(transform.k, transform.k)
-  context.drawImage(image, 0, 0)
+  context.drawImage(sliceImg, 0, 0, baseSlice.xVoxels, baseSlice.yVoxels, baseSlice.dxDraw, baseSlice.dyDraw, baseSlice.dWidthDraw, baseSlice.dHeightDraw)
   context.restore()
 }
 
@@ -129,7 +85,7 @@ function zoomedCanvas (transform, densityVol, canvas, axis) {
  * @param {Object} transform The zoom transform object.
  * @param {Panel} panel The panel to be zoomed on.
  */
-function zoomedAll (transform, panel) {
+function zoomedAll (transform, panel) { // eslint-disable-line no-unused-vars
   panel.zoomTransform = transform
   const axisElements = panel.axisElements
   const volume = panel.volume
@@ -140,6 +96,7 @@ function zoomedAll (transform, panel) {
     zoomedCanvas(
       transform,
       panel.densityVol,
+      panel.prevSliceImg,
       axisElements['plot-density'],
       axis
     )
@@ -152,22 +109,26 @@ function zoomedAll (transform, panel) {
       .attr('transform', transform.toString())
   }
 
+  axisElements['plot-dose']
+    .selectAll('g.roi-contour')
+    .attr('transform', transform.toString())
+
   // Zoom marker
   axisElements['plot-marker']
     .select('g.marker')
     .attr('transform', transform.toString())
 
-  // Create new scale ojects based on event
-  var newxScale = transform.rescaleX(volume.prevSlice[panel.axis].xScale)
-  var newyScale = transform.rescaleY(volume.prevSlice[panel.axis].yScale)
+  // Create new scale objects based on event
+  var newXScale = transform.rescaleX(volume.baseSlices[panel.axis].xScale)
+  var newYScale = transform.rescaleY(volume.baseSlices[panel.axis].yScale)
 
   // Update axes
   axisElements['axis-svg']
     .select('.x-axis')
-    .call(d3.axisBottom().scale(newxScale).ticks(6))
+    .call(d3.axisBottom().scale(newXScale).ticks(6))
   axisElements['axis-svg']
     .select('.y-axis')
-    .call(d3.axisLeft().scale(newyScale).ticks(6))
+    .call(d3.axisLeft().scale(newYScale).ticks(6))
 
   // Update grid
   axisElements['axis-svg']
@@ -175,7 +136,7 @@ function zoomedAll (transform, panel) {
     .call(
       d3
         .axisBottom()
-        .scale(newxScale)
+        .scale(newXScale)
         .tickSize(-MAIN_VIEWER_DIMENSIONS.height)
         .tickFormat('')
         .ticks(6)
@@ -185,11 +146,11 @@ function zoomedAll (transform, panel) {
     .call(
       d3
         .axisLeft()
-        .scale(newyScale)
+        .scale(newYScale)
         .tickSize(-MAIN_VIEWER_DIMENSIONS.width)
         .tickFormat('')
         .ticks(6)
     )
 }
 
-export { getZoom, zoomedAll, zoomedDoseProfile }
+// export { getZoom, zoomedAll, zoomedDoseProfile }

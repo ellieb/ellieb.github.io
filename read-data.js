@@ -36,7 +36,7 @@
  * @param {Object} data The .egsphant file read as text.
  * @returns {Object}
  */
-var processPhantomData = function (data) {
+var processPhantomData = function (data) { // eslint-disable-line no-unused-vars
   var getMax = function (a) {
     return Math.max(...a.map((e) => (Array.isArray(e) ? getMax(e) : e)))
   }
@@ -50,8 +50,9 @@ var processPhantomData = function (data) {
 
   // Get number and type of materials
   const numMaterials = parseInt(data[curr++])
-  const materialList = data.slice(curr, numMaterials + curr)
-  curr += numMaterials * 2
+  const materialList = data.slice(curr, numMaterials + curr).map(mat => mat.trim())
+  curr += numMaterials
+  curr += (data[curr].trim().split(/ +/).length === numMaterials) ? 1 : numMaterials
 
   // Get number of x, y, and z voxels
   const [numVoxX, numVoxY, numVoxZ] = data[curr++]
@@ -79,6 +80,7 @@ var processPhantomData = function (data) {
       curr,
       parseInt(curr) + parseInt(numVoxY) * parseInt(numVoxZ) + parseInt(numVoxZ)
     )
+    .map((subArr) => subArr.trim())
     .filter((subArr) => subArr.length > 0)
 
   curr += numVoxY * numVoxZ + numVoxZ + 1
@@ -89,6 +91,7 @@ var processPhantomData = function (data) {
       curr,
       parseInt(curr) + parseInt(numVoxY) * parseInt(numVoxZ) + parseInt(numVoxZ)
     )
+    .map((subArr) => subArr.trim())
     .filter((subArr) => subArr.length > 0)
 
   const densityGrid = lines.map((subArr) => {
@@ -136,7 +139,7 @@ var processPhantomData = function (data) {
  * @param {Object} data The .3ddose file read as text.
  * @returns {Object}
  */
-var processDoseData = function (data) {
+var processDoseData = function (data) { // eslint-disable-line no-unused-vars
   // The current line of the text file being read
   let curr = 0
 
@@ -225,8 +228,9 @@ var processDoseData = function (data) {
     },
     dose: dose, // The flattened dose matrix
     error: error, // The flattened error matrix
-    maxDose: maxDose // The maximum dose value
+    maxDose: maxDose, // The maximum dose value
+    units: 'RELATIVE' // The dose units
   }
 }
 
-export { processDoseData, processPhantomData }
+// export { processDoseData, processPhantomData }

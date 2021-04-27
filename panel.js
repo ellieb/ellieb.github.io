@@ -31,14 +31,20 @@
 // definitions for StandardJS formatter
 /* global d3 */
 
-import { MAIN_VIEWER_DIMENSIONS } from './index.js'
-import { invertTransform, updateVoxelCoords } from './voxel-coordinates.js'
-import { getZoom, zoomedAll } from './zoom.js'
+// REMOVE THESE GLOBAL IMPORTS ONCE MODULES RE-IMPLEMENTED
+/* global getZoom */
+/* global MAIN_VIEWER_DIMENSIONS */
+/* global zoomedAll */
+/* global updateVoxelCoords */
+
+// import { MAIN_VIEWER_DIMENSIONS } from './index.js'
+// import { updateVoxelCoords } from './voxel-coordinates.js'
+// import { getZoom, zoomedAll } from './zoom.js'
 
 /** @class Panel holds one axis view and detects clicks, stores information, and
  * updates plots */
 // TODO: Build panel HTML inside panel object
-class Panel {
+class Panel { // eslint-disable-line no-unused-vars
   /**
    * Creates an instance of a Panel.
    *
@@ -63,6 +69,8 @@ class Panel {
     axis,
     axisElements,
     sliceSlider,
+    showVoxelInfoCheckbox,
+    showDoseProfileCheckbox,
     dispatch,
     id,
     zoomTransform = null,
@@ -79,12 +87,14 @@ class Panel {
     this.volumeViewerId = id
     this.zoomTransform = zoomTransform
     this.markerPosition = markerPosition
+    this.densitySliceNum = null
+    this.doseSliceNum = null
+    this.slicePos = null
+    this.prevSliceImg = null
 
     // Properties to check values of voxel and dose profile checkboxes
-    this.showMarker = () =>
-      d3.select("input[name='show-marker-checkbox']").node().checked
-    this.showCrosshairs = () =>
-      d3.select("input[name='show-dose-profile-checkbox']").node().checked
+    this.showMarker = () => showVoxelInfoCheckbox.node().checked
+    this.showDoseProfile = () => showDoseProfileCheckbox.node().checked
 
     // Update circle marker position and voxel coords on click
     const panel = this
@@ -115,21 +125,12 @@ class Panel {
   }
 
   /**
-   * Return the slice number of the current volume loaded in the panel.
-   *
-   * @returns {number}
-   */
-  get sliceNum () {
-    return this.volume.prevSlice[this.axis].sliceNum
-  }
-
-  /**
    * Show crosshairs if plot dose checkbox is selected.
    */
   updateCrosshairDisplay () {
     this.axisElements['plot-marker']
       .selectAll('line.crosshair')
-      .style('display', this.showCrosshairs() ? '' : 'none')
+      .style('display', this.showDoseProfile() ? '' : 'none')
   }
 
   /**
@@ -142,30 +143,6 @@ class Panel {
   }
 
   /**
-   * Change the slice of the loaded volumes in the panel.
-   *
-   * @param {number} sliceNum The number of the current slice displayed in the panel.
-   */
-  updateSlice (sliceNum) {
-    let slice
-
-    if (this.densityVol) {
-      const slicePos = this.densityVol.prevSlice[this.axis].zScale.invert(sliceNum)
-      slice = this.densityVol.getSlice(this.axis, slicePos)
-      this.densityVol.drawDensity(slice, this.zoomTransform)
-    }
-    if (this.doseVol) {
-      const args = this.densityVol ? this.densityVol.prevSlice : undefined
-      const slicePos = this.densityVol
-        ? this.densityVol.prevSlice[this.axis].zScale.invert(sliceNum)
-        : this.doseVol.prevSlice[this.axis].zScale.invert(sliceNum)
-
-      slice = this.doseVol.getSlice(this.axis, slicePos, args)
-      this.doseVol.drawDose(slice, this.zoomTransform)
-    }
-  }
-
-  /**
    * Create the drag behaviour of the circle marker and crosshairs.
    *
    * @returns {Object}
@@ -174,7 +151,7 @@ class Panel {
     const panel = this
 
     // Define the drag attributes
-    function dragstarted () {
+    function dragStarted () {
       d3.select(this).raise()
       d3.select(this).attr('cursor', 'grabbing')
     }
@@ -192,11 +169,13 @@ class Panel {
         panel.densityVol,
         panel.doseVol,
         worldCoords,
-        panel.volumeViewerId
+        panel.volumeViewerId,
+        panel.showMarker,
+        panel.showDoseProfile
       )
     }
 
-    function dragended () {
+    function dragEnded () {
       d3.select(this).attr('cursor', 'grab')
 
       const plotCoords = panel.zoomTransform ? panel.zoomTransform.apply([d3.event.x, d3.event.y]) : [d3.event.x, d3.event.y]
@@ -210,9 +189,9 @@ class Panel {
 
     return d3
       .drag()
-      .on('start', dragstarted)
+      .on('start', dragStarted)
       .on('drag', dragged)
-      .on('end', dragended)
+      .on('end', dragEnded)
   }
 
   /**
@@ -229,12 +208,9 @@ class Panel {
     this.axisElements['plot-marker'].select('.marker').remove()
 
     // If there is existing transformation, calculate proper x and y coordinates
-    const x = this.zoomTransform
-      ? invertTransform(coords[0], this.zoomTransform, 'x')
-      : coords[0]
-    const y = this.zoomTransform
-      ? invertTransform(coords[1], this.zoomTransform, 'y')
-      : coords[1]
+    const [x, y] = this.zoomTransform
+      ? this.zoomTransform.invert(coords)
+      : coords
 
     // Add new marker with modified coordinates so it can smoothly transform with other elements
     var markerHolder = this.axisElements['plot-marker']
@@ -272,7 +248,7 @@ class Panel {
       .attr('y1', 0)
       .attr('x2', x)
       .attr('y2', MAIN_VIEWER_DIMENSIONS.height)
-      .style('display', this.showCrosshairs() ? '' : 'none')
+      .style('display', this.showDoseProfile() ? '' : 'none')
       .classed('active', activePanel)
 
     // Create vertical line
@@ -284,7 +260,7 @@ class Panel {
       .attr('y1', y)
       .attr('x2', MAIN_VIEWER_DIMENSIONS.width)
       .attr('y2', y)
-      .style('display', this.showCrosshairs() ? '' : 'none')
+      .style('display', this.showDoseProfile() ? '' : 'none')
       .classed('active', activePanel)
   }
 
@@ -305,25 +281,119 @@ class Panel {
   coordsToWorld (coords) {
     const volume = this.densityVol || this.doseVol
     const axis = this.axis
-    const sliceNum = this.sliceNum
+    const sliceNum = this.densitySliceNum || this.doseSliceNum
     const transform = this.zoomTransform
 
     // Invert transformation if applicable then invert scale to get world coordinate
-    const i = volume.prevSlice[axis].xScale.invert(
+    const i = volume.baseSlices[axis].xScale.invert(
       transform ? transform.invert(coords)[0] : coords[0]
     )
-    const j = volume.prevSlice[axis].yScale.invert(
+    const j = volume.baseSlices[axis].yScale.invert(
       transform ? transform.invert(coords)[1] : coords[1]
     )
 
-    // Add 0.5 to sliceNum in order to map values to center of voxel bondaries
-    // TODO: Perhaps fix scale to get rid of the 0.5 hack
-    const k = volume.prevSlice[axis].zScale.invert(parseInt(sliceNum) + 0.5)
+    const k = volume.baseSlices[axis].zScale.invert(parseInt(sliceNum))
 
     const [xVal, yVal, zVal] =
       axis === 'xy' ? [i, j, k] : axis === 'yz' ? [k, i, j] : [i, k, j]
     return [xVal, yVal, zVal]
   }
+
+  setDensityVolume (densityVol, slicePos) {
+    this.densityVol = densityVol
+    this.slicePos = slicePos
+
+    if (this.doseVol !== undefined) {
+      this.adjustDoseBaseSlices()
+    } else {
+      this.setupZoom()
+    }
+
+    this.densitySliceNum = Math.round(this.densityVol.baseSlices[this.axis].zScale(slicePos))
+    this.volume = densityVol
+  }
+
+  setDoseVolume (doseVol, slicePos) {
+    this.doseVol = doseVol
+    this.slicePos = slicePos
+
+    // If existing density volume, adjust doseVol baseSlices
+    if (this.densityVol !== undefined) {
+      this.adjustDoseBaseSlices()
+    } else {
+      this.setupZoom()
+      this.volume = doseVol
+    }
+
+    this.doseSliceNum = Math.round(this.doseVol.baseSlices[this.axis].zScale(slicePos))
+  }
+
+  // TODO: Move to volume class
+  adjustDoseBaseSlices () {
+    const AXES = ['xy', 'yz', 'xz']
+
+    AXES.forEach((axis) => {
+      const densityBaseSlice = this.densityVol.baseSlices[axis]
+      const x = this.doseVol.baseSlices[axis].x
+      const y = this.doseVol.baseSlices[axis].y
+      const xVoxels = this.doseVol.baseSlices[axis].xVoxels
+      const yVoxels = this.doseVol.baseSlices[axis].yVoxels
+      const xRange = [Math.round(densityBaseSlice.xScale(x[0])), Math.round(densityBaseSlice.xScale(x[x.length - 1]))]
+      const yRange = [Math.round(densityBaseSlice.yScale(y[0])), Math.round(densityBaseSlice.yScale(y[y.length - 1]))]
+
+      const contourXScale = d3
+        .scaleLinear()
+        .domain([0, xVoxels])
+        .range(xRange)
+      const contourYScale = d3
+        .scaleLinear()
+        .domain(axis === 'xy' ? [yVoxels, 0] : [0, yVoxels])
+        .range(axis === 'xy' ? yRange.reverse() : yRange)
+
+      this.doseVol.baseSlices[axis].contourTransform = ({ type, value, coordinates }) => ({
+        type,
+        value,
+        coordinates: coordinates.map((rings) =>
+          rings.map((points) =>
+            points.map(([i, j]) => [contourXScale(i), contourYScale(j)])
+          )
+        )
+      })
+    })
+  }
+
+  /**
+   * Clear the current dose plot.
+   */
+  clearDosePlot () {
+    // Clear dose plot
+    this.axisElements['plot-dose'].selectAll('g.dose-contour').remove()
+  }
+
+  /**
+   * Clear the current density plot.
+   */
+  clearDensityPlot () {
+    // Clear density plot
+    const canvas = this.axisElements['plot-density'].node()
+    const context = canvas.getContext('2d')
+    context.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  /**
+  * Initialize the behaviour of the canvas
+  */
+  initializeCanvas () {
+    // Get the canvas and context in the webpage
+    const canvas = this.axisElements['plot-density'].node()
+    const context = canvas.getContext('2d')
+
+    // Disable smoothing to clearly show pixels
+    context.imageSmoothingEnabled = false
+    context.mozImageSmoothingEnabled = false
+    context.webkitImageSmoothingEnabled = false
+    context.msImageSmoothingEnabled = false
+  }
 }
 
-export { Panel }
+// export { Panel }

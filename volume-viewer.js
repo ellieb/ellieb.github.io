@@ -31,25 +31,62 @@
 // definitions for StandardJS formatter
 /* global d3 */
 
-import {
-  densityVolumeList, doseComparisonVolumeList, doseVolumeList, volumeViewerList
-} from './index.js'
-import {
-  enableCheckboxForDensityPlot, enableCheckboxForDoseProfilePlot,
-  enableCheckboxForVoxelInformation, enableExportVisualizationButton
-} from './checkbox-button-helper.js'
-import { DoseProfile } from './dose-profile.js'
-import { Panel } from './panel.js'
-import { Slider } from './slider.js'
-import { DoseComparisonVolume } from './volume.js'
-import { buildVoxelInfoHtml, coordsToVoxel, updateVoxelCoords } from './voxel-coordinates.js'
-import { initializeMinMaxDensitySlider } from './min-max-density-slider.js'
+// REMOVE THESE GLOBAL IMPORTS ONCE MODULES RE-IMPLEMENTED
+/* global enableCheckboxForDensityPlot */
+/* global enableButton */
+/* global initializeMinMaxDensitySlider */
+/* global doseVolumeList */
+/* global densityVolumeList */
+/* global doseComparisonVolumeList */
+/* global volumeViewerList */
+/* global DoseComparisonVolume */
+/* global defineShowMarkerCheckboxBehaviour */
+/* global defineShowProfileCheckboxBehaviour */
+/* global defineShowROICheckboxBehaviour */
+/* global defineExportPNGButtonBehaviour */
+/* global defineExportDoseProfileCSVButtonBehaviour */
+/* global defineExportDVHToCSVButtonBehaviour */
+/* global defineNormalizeDoseCheckboxBehaviour */
+/* global defineShowDVHCheckboxBehaviour */
+/* global buildVoxelInfoHtml */
+/* global coordsToVoxel */
+/* global updateVoxelCoords */
+/* global DoseProfile */
+/* global Panel */
+/* global Slider */
+/* global initializeMaxDoseSlider */
+/* global structureSetVolumeList */
+/* global DoseVolumeHistogram */
+/* global initializeDoseCompNormSlider */
+
+// import {
+//   densityVolumeList, doseComparisonVolumeList, doseVolumeList,
+//   volumeViewerList, structureSetVolumeList
+// } from './index.js'
+// import {
+//   defineShowMarkerCheckboxBehaviour, defineShowProfileCheckboxBehaviour, defineShowROICheckboxBehaviour
+//   enableCheckboxForDensityPlot, enableButton, defineShowDVHCheckboxBehaviour,
+//   defineNormalizeDoseCheckboxBehaviour
+// } from './checkbox-button-helper.js'
+// import { DoseProfile } from './dose-profile.js'
+// import { Panel } from './panel.js'
+// import { Slider } from './sliders/slider.js'
+//   import { initializeMinMaxDensitySlider } from
+//   './sliders/min-max-density-slider.js'
+// import {initializeMaxDoseSlider} from './sliders/max-dose-slider.js'
+// import {initializeDoseCompNormSlider} from './sliders/dose-comp-normalization-slider.js'
+// import { DoseComparisonVolume } from './volumes/dose-comparison-volume.js'
+// import { buildVoxelInfoHtml, coordsToVoxel, updateVoxelCoords } from './voxel-coordinates.js'
+//   import { defineExportDoseProfileCSVButtonBehaviour,
+//   defineExportDVHToCSVButtonBehaviour, defineExportPNGButtonBehaviour } from
+//   './export.mjs'
+// import { DoseVolumeHistogram } from './dose-volume-histogram.js'
 
 const AXES = ['xy', 'yz', 'xz']
 
 /** @class VolumeViewer combines a density and/or dose file, three panels for
  * the three axes views, and three dose profile plots. */
-class VolumeViewer {
+class VolumeViewer { // eslint-disable-line no-unused-vars
   /**
    * Creates an instance of a VolumeViewer.
    *
@@ -77,10 +114,14 @@ class VolumeViewer {
     // Initialize class properties
     this.doseVolume = null
     this.densityVolume = null
+    this.structureSetVolume = null
     this.panels = null
     this.sliceSliders = {}
     this.doseProfileList = new Array(3)
     this.dispatch = d3.dispatch('markerchange')
+    this.voxelInfoDiv = null
+    this.worldCoords = null // TODO: Initialize this value
+    this.doseNorm = 1
 
     this.buildBaseHtml(id)
     this.initializeDispatch()
@@ -88,17 +129,19 @@ class VolumeViewer {
 
   drawAxes (zoomTransform, svgAxis, slice) {
     // If density is already plotted, move dose slice?
+    const volume = this.densityVolume || this.doseVolume
+    const baseSlice = volume.baseSlices[slice.axis]
 
     svgAxis.selectAll('.x-axis, .y-axis, .x-axis-grid, .y-axis-grid').remove()
 
     // TODO: Check for existing scale on axes
     // If there is existing transformation, apply it
     const xScale = zoomTransform
-      ? zoomTransform.rescaleX(slice.xScale)
-      : slice.xScale
+      ? zoomTransform.rescaleX(baseSlice.xScale)
+      : baseSlice.xScale
     const yScale = zoomTransform
-      ? zoomTransform.rescaleY(slice.yScale)
-      : slice.yScale
+      ? zoomTransform.rescaleY(baseSlice.yScale)
+      : baseSlice.yScale
 
     // Create and append the x and y axes
     var xAxis = d3.axisBottom().scale(xScale).ticks(6)
@@ -107,7 +150,7 @@ class VolumeViewer {
     svgAxis
       .append('g')
       .attr('class', 'x-axis')
-      .attr('transform', 'translate(0,' + slice.dimensions.height + ')')
+      .attr('transform', 'translate(0,' + volume.dimensions.height + ')')
       .style('font-size', '12px')
       .call(xAxis)
     svgAxis
@@ -120,20 +163,20 @@ class VolumeViewer {
     var xAxisGrid = d3
       .axisBottom()
       .scale(xScale)
-      .tickSize(-slice.dimensions.height)
+      .tickSize(-volume.dimensions.height)
       .tickFormat('')
       .ticks(6)
     var yAxisGrid = d3
       .axisLeft()
       .scale(yScale)
-      .tickSize(-slice.dimensions.width)
+      .tickSize(-volume.dimensions.width)
       .tickFormat('')
       .ticks(6)
 
     svgAxis
       .append('g')
       .attr('class', 'x-axis-grid')
-      .attr('transform', 'translate(0,' + slice.dimensions.height + ')')
+      .attr('transform', 'translate(0,' + volume.dimensions.height + ')')
       .call(xAxisGrid)
     svgAxis.append('g').attr('class', 'y-axis-grid').call(yAxisGrid)
 
@@ -144,9 +187,9 @@ class VolumeViewer {
       .attr(
         'transform',
         'translate(' +
-        slice.dimensions.width / 2 +
+        volume.dimensions.width / 2 +
         ' ,' +
-        (slice.dimensions.fullHeight - 25) +
+        (volume.dimensions.fullHeight - 25) +
         ')'
       )
       .style('text-anchor', 'middle')
@@ -160,13 +203,40 @@ class VolumeViewer {
       .attr(
         'transform',
         'translate(' +
-        (25 - slice.dimensions.margin.left) +
+        (25 - volume.dimensions.margin.left) +
         ' ,' +
-        slice.dimensions.height / 2 +
+        volume.dimensions.height / 2 +
         ') rotate(-90)'
       )
       .style('text-anchor', 'middle')
       .text(slice.axis[1] + ' (cm)')
+  }
+
+  /**
+   * Set the dose comparison selector to only show dose volume not already loaded.
+   *
+   * @param {number} idx The index of the dose volume already loaded in the viewer.
+   */
+  initializeDoseComparisonSelector (idx) {
+    // Enable the dose comparison selector
+    this.doseComparisonSelector.attr('disabled', null)
+
+    // Remove the existing nodes
+    this.doseComparisonSelector.selectAll('option').nodes().forEach((element, i) => {
+      if (i !== 0) {
+        element.remove()
+      }
+    })
+
+    // Add all but the selected dose volume as options for the dose comparison selector
+    doseVolumeList.forEach((vol, i) => {
+      if (i !== idx) {
+        this.doseComparisonSelector
+          .append('option')
+          .attr('value', i)
+          .text(vol.fileName)
+      }
+    })
   }
 
   /**
@@ -177,6 +247,11 @@ class VolumeViewer {
   setDoseVolume (doseVol) {
     this.doseVolume = doseVol
 
+    // Set the min and max dose variable
+    this.minDoseVar = 0
+    this.maxDoseVar = parseFloat(doseVol.data.maxDose)
+    this.initializeThresholds()
+
     // Set dose volume html elements
     doseVol.setHtmlObjects(
       this.svgObjs['plot-dose'],
@@ -184,58 +259,101 @@ class VolumeViewer {
       this.doseLegendSvg
     )
 
-    doseVol.initializeMaxDoseSlider(this.panels)
-    doseVol.initializeLegend()
-    doseVol.initializeDoseContourInput(this.panels)
+    this.initializeDoseLegend(this.thresholds, this.minDoseVar, this.maxDoseVar)
+    this.initializeDoseContourInput()
+
+    if (doseVolumeList.length >= 2) {
+      const idx = doseVolumeList.findIndex((vol) => vol.fileName === doseVol.fileName)
+      this.initializeDoseComparisonSelector(idx)
+    }
 
     const dims = 'zxy'
-    const sliceNum = {}
-    const slicePos = {}
+    var sliceNum, slicePos
 
-    AXES.forEach((axis, i) => {
-      // Get the correct slice number and position
-      var getPos = (arr, i) => (arr[i] + arr[i + 1]) / 2.0
-      sliceNum[axis] = this.densityVolume
-        ? this.densityVolume.prevSlice[axis].sliceNum
-        : Math.floor(doseVol.data.voxelNumber[dims[i]] / 2)
-      slicePos[axis] = this.densityVolume
-        ? this.densityVolume.prevSlice[axis].slicePos
-        : getPos(doseVol.data.voxelArr[dims[i]], Math.floor(doseVol.data.voxelNumber[dims[i]] / 2))
-
-      const args = this.densityVolume ? this.densityVolume.prevSlice : undefined
-      const slice = doseVol.getSlice(axis, slicePos[axis], args)
-      doseVol.drawDose(slice, this.panels[axis].zoomTransform)
-      // Update the axis
-      this.drawAxes(
-        this.panels[axis].zoomTransform,
-        this.svgObjs['axis-svg'][axis],
-        slice
-      )
-      this.sliceSliders[axis].setCurrentValue(sliceNum[axis])
-    })
+    // Get the average of items at index i and i+1
+    const getPos = (arr, i) => (arr[i] + arr[i + 1]) / 2.0
 
     // Set the panel doseVolume object
-    Object.values(this.panels).forEach((panel) => {
-      panel.doseVol = doseVol
-      if (!panel.volume) {
-        panel.volume = doseVol
-        panel.setupZoom()
+    Object.values(this.panels).forEach((panel, i) => {
+      // Get the slice position
+      slicePos = panel.densityVol
+        ? panel.slicePos
+        : getPos(doseVol.data.voxelArr[dims[i]], Math.floor(doseVol.data.voxelNumber[dims[i]] / 2))
+
+      // Set the dose volume in the panel
+      panel.setDoseVolume(doseVol, slicePos)
+
+      if (!panel.densityVol) {
         // Update the slider max values
-        AXES.forEach((axis, i) => {
-          this.sliceSliders[axis].setMaxValue(
-            doseVol.data.voxelNumber[dims[i]]
-          )
-          this.sliceSliders[axis].setCurrentValue(sliceNum[axis])
+        sliceNum = Math.round(doseVol.baseSlices[panel.axis].zScale(slicePos))
+        this.sliceSliders[panel.axis].setMaxValue(doseVol.data.voxelNumber[dims[i]])
+        this.sliceSliders[panel.axis].setCurrentValue(sliceNum)
+
+        // Draw the slice
+        const slice = doseVol.getSlice(panel.axis, slicePos)
+        doseVol.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+
+        // Update the axis
+        this.drawAxes(
+          panel.zoomTransform,
+          this.svgObjs['axis-svg'][panel.axis],
+          slice
+        )
+      } else {
+        // Draw the slice
+        const slice = doseVol.getSlice(panel.axis, slicePos)
+        doseVol.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+      }
+
+      if (this.structureSetVolume) {
+        // Update the plots
+        // Get list of class names of hidden contours
+        const hiddenROIClassList = this.getHiddenClassList(this.ROILegendSvg)
+        Object.values(this.panels).forEach((panel) => {
+          this.structureSetVolume.plotStructureSet(panel.axis, panel.slicePos, panel.axisElements['plot-dose'], panel.volume, panel.zoomTransform, hiddenROIClassList)
         })
       }
     })
 
+    // Update the voxel info
+    if (this.worldCoords) this.updateVoxelInfo(this.worldCoords)
+
+    // If dose normalization is checked
+    if (this.normalizeDoseCheckbox.node().checked) {
+      const doseNormVal = parseFloat(this.doseNormValInput.select('input').node().value) * 100 // Convert from cGy to Gy
+      const doseNormPercent = parseFloat(this.doseNormPercentInput.select('input').node().value) / 100 // Convert from percent to decimal
+      this.normalizeDoseValues(doseNormVal, doseNormPercent)
+    }
+
+    // If show DVH is checked
+    if (this.showDVHCheckbox.node().checked) {
+      if (this.isDVHAllowed()) {
+        // Update DVH plot
+        this.DVH.setDVHData(this.structureSetVolume, this.doseVolume)
+        this.DVH.plotDVH(this.doseNorm)
+      } else {
+        // Uncheck show DVH checkbox and disable
+        this.showDVHCheckbox.node().checked = false
+        this.DVH.parentSvg.style('display', 'none')
+        this.disableCheckbox(this.showDVHCheckbox)
+      }
+    }
+
     if (this.densityVolume) {
       enableCheckboxForDensityPlot()
     }
-    enableCheckboxForDoseProfilePlot()
-    enableExportVisualizationButton()
-    enableCheckboxForVoxelInformation()
+    enableButton(this.saveVisButton)
+    this.enableCheckbox(this.showDoseProfileCheckbox)
+    this.enableCheckbox(this.showVoxelInfoCheckbox)
+    this.enableCheckbox(this.normalizeDoseCheckbox)
+    if (this.isDVHAllowed()) this.enableCheckbox(this.showDVHCheckbox)
+    initializeMaxDoseSlider(this.maxDoseParentDiv, doseVol, this)
+    this.doseCompNormParentDiv.selectAll('*').remove()
+  }
+
+  isDVHAllowed () {
+    const isNormalized = () => (this.normalizeDoseCheckbox.node().checked && this.doseNormValInput.select('input').node().value && this.doseNormPercentInput.select('input').node().value)
+    return this.doseVolume && this.showROIOutlinesCheckbox.node().checked && ((this.doseVolume.data.units === 'GY' || (this.doseVolume.data.units === 'RELATIVE' && isNormalized())))
   }
 
   /**
@@ -246,69 +364,114 @@ class VolumeViewer {
   setDensityVolume (densityVol) {
     this.densityVolume = densityVol
 
+    // Set the min and max density variables
+    this.maxDensityVar = parseFloat(densityVol.data.maxDensity)
+    this.minDensityVar = parseFloat(densityVol.data.minDensity)
+
     densityVol.setHtmlObjects(
       this.svgObjs['plot-density'],
       this.densityLegendHolder,
       this.densityLegendSvg
     )
 
-    densityVol.initializeLegend()
+    this.initializeDensityLegend(this.minDensityVar, this.maxDensityVar)
     const dims = 'zxy'
-    const sliceNum = {}
-    const slicePos = {}
+    var sliceNum, slicePos
 
-    AXES.forEach((axis, i) => {
-      // Get the correct slice number
-      sliceNum[axis] = this.doseVolume
-        ? this.doseVolume.prevSlice[axis].sliceNum
-        : Math.floor(densityVol.data.voxelNumber[dims[i]] / 2)
-
-      var getPos = (arr, i) => (arr[i] + arr[i + 1]) / 2.0
-
-      slicePos[axis] = this.doseVolume
-        ? this.doseVolume.prevSlice[axis].slicePos
-        : getPos(densityVol.data.voxelArr[dims[i]], Math.floor(densityVol.data.voxelNumber[dims[i]] / 2))
-
-      const slice = densityVol.getSlice(axis, slicePos[axis])
-      densityVol.drawDensity(slice, this.panels[axis].zoomTransform)
-      // Update the axis
-      this.drawAxes(
-        this.panels[axis].zoomTransform,
-        this.svgObjs['axis-svg'][axis],
-        slice
-      )
-    })
+    // Get the average of items at index i and i+1
+    const getPos = (arr, i) => (arr[i] + arr[i + 1]) / 2.0
 
     // Set the panel densityVolume object
-    Object.values(this.panels).forEach((panel) => {
-      panel.densityVol = densityVol
-      if (!panel.volume) {
-        panel.volume = densityVol
-        panel.setupZoom()
-        // Update the slider max values
-        AXES.forEach((axis, i) => {
-          this.sliceSliders[axis].setMaxValue(
-            densityVol.data.voxelNumber[dims[i]]
-          )
-          this.sliceSliders[axis].setCurrentValue(sliceNum[axis])
-        })
+    Object.values(this.panels).forEach((panel, i) => {
+      // Initialize the canvas
+      panel.initializeCanvas()
+
+      // Get the slice position
+      slicePos = panel.doseVol
+        ? panel.slicePos
+        : getPos(densityVol.data.voxelArr[dims[i]], Math.floor(densityVol.data.voxelNumber[dims[i]] / 2))
+
+      // Set the density volume in the panel
+      panel.setDensityVolume(densityVol, slicePos)
+
+      // Update the slider max values
+      sliceNum = Math.round(densityVol.baseSlices[panel.axis].zScale(slicePos))
+      this.sliceSliders[panel.axis].setMaxValue(densityVol.data.voxelNumber[dims[i]])
+      this.sliceSliders[panel.axis].setCurrentValue(sliceNum)
+
+      // Draw the slice
+      const densitySlice = densityVol.getSlice(panel.axis, slicePos)
+      panel.prevSliceImg = densityVol.drawDensity(densitySlice, panel.zoomTransform, panel.axisElements['plot-density'], this.minDensityVar, this.maxDensityVar)
+
+      // Update the axis
+      this.drawAxes(
+        panel.zoomTransform,
+        this.svgObjs['axis-svg'][panel.axis],
+        densitySlice
+      )
+
+      if (panel.doseVol) {
+        // Redraw dose contours
+        const doseSlice = panel.doseVol.sliceCache[panel.axis][panel.doseSliceNum]
+        panel.doseVol.drawDose(doseSlice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+      }
+
+      if (this.structureSetVolume) {
+        // Get list of class names of hidden contours
+        const hiddenROIClassList = this.getHiddenClassList(this.ROILegendSvg)
+        this.structureSetVolume.plotStructureSet(densitySlice.axis, densitySlice.slicePos, panel.axisElements['plot-dose'], densityVol, panel.zoomTransform, hiddenROIClassList)
       }
     })
 
     if (this.doseVolume) {
       enableCheckboxForDensityPlot()
     }
-    enableExportVisualizationButton()
+    enableButton(this.saveVisButton)
     // TODO: Move this outside volume viewer and assume all loaded egsphants
     // have same density range
     initializeMinMaxDensitySlider(
       this.minParentDiv,
       this.maxParentDiv,
       densityVol,
-      this.panels
+      this
     )
 
-    enableCheckboxForVoxelInformation()
+    this.enableCheckbox(this.showVoxelInfoCheckbox)
+  }
+
+  /**
+   * Set the structure set volume of the VolumeViewer.
+   *
+   * @param {StructureSetVolume} structureSetVolume The structure set volume to be set.
+   */
+  setStructureSetVolume (structureSetVolume) {
+    this.structureSetVolume = structureSetVolume
+
+    this.initializeStructureSetLegend(structureSetVolume)
+
+    // Update the plots
+    // Get list of class names of hidden contours
+    const hiddenROIClassList = this.getHiddenClassList(this.ROILegendSvg)
+    Object.values(this.panels).forEach((panel) => {
+      this.structureSetVolume.plotStructureSet(panel.axis, panel.slicePos, panel.axisElements['plot-dose'], panel.volume, panel.zoomTransform, hiddenROIClassList)
+    })
+  }
+
+  /**
+   * Get a class list of all the hidden ROI contours.
+   *
+   * @param {Object} legendSvg The svg element of the legend.
+   * @returns {string[]}
+   */
+  getHiddenClassList (legendSvg) {
+    const hiddenClassList = []
+
+    legendSvg.selectAll('g.cell.hidden').each(function (d, i) {
+      hiddenClassList[i] =
+        '.' + d3.select(this).attr('class').split(' ')[1]
+    })
+
+    return hiddenClassList
   }
 
   /**
@@ -317,16 +480,39 @@ class VolumeViewer {
   removeDoseVolume () {
     this.doseVolume = null
 
+    // Clear dose legend
+    this.doseLegendSvg.selectAll('*').remove()
+
+    // Remove existing dose contour inputs
+    this.doseLegendHolder.selectAll('input').remove()
+
     // Remove the volume object from panels
     Object.values(this.panels).forEach((panel) => {
       // Clear the panel
-      if (panel.doseVol) panel.doseVol.clearDose(panel.axis)
+      if (panel.doseVol) panel.clearDosePlot()
 
       // Set the volume object to density vol if need be
       if (panel.volume === panel.doseVol) panel.volume = panel.densityVol
 
       panel.doseVol = null
     })
+
+    // Uncheck normalize dose file and disable
+    this.normalizeDoseCheckbox.node().checked = false
+    this.disableCheckbox(this.normalizeDoseCheckbox)
+
+    // Uncheck plot dose profile and disable
+    this.showDoseProfileCheckbox.node().checked = false
+    this.disableCheckbox(this.showDoseProfileCheckbox)
+
+    // Uncheck show DVH checkbox and disable
+    this.showDVHCheckbox.node().checked = false
+    this.DVH.parentSvg.style('display', 'none')
+    this.disableCheckbox(this.showDVHCheckbox)
+
+    // Remove dose sliders
+    this.maxDoseParentDiv.selectAll('*').remove()
+    this.doseCompNormParentDiv.selectAll('*').remove()
   }
 
   /**
@@ -339,10 +525,13 @@ class VolumeViewer {
     this.minParentDiv.select('*').remove()
     this.maxParentDiv.select('*').remove()
 
+    // Clear density legend
+    this.densityLegendSvg.selectAll('*').remove()
+
     // Remove the volume object from panels
     Object.values(this.panels).forEach((panel) => {
       // Clear the panel
-      if (panel.densityVol) panel.densityVol.clearDensity(panel.axis)
+      if (panel.densityVol) panel.clearDensityPlot()
 
       // Set the volume object to density vol if need be
       if (panel.volume === panel.densityVol) panel.volume = panel.doseVol
@@ -382,16 +571,6 @@ class VolumeViewer {
   // TODO: Create event listeners instead of calling this every time
   updateDoseFileSelector (doseVol, i) {
     this.doseSelector.append('option').attr('value', i).text(doseVol.fileName)
-
-    this.doseComparisonSelector
-      .append('option')
-      .attr('value', i)
-      .text(doseVol.fileName)
-
-    // TODO: Wait until first dose selector has dose loaded to enable
-    if (doseVolumeList.length >= 2) {
-      this.doseComparisonSelector.attr('disabled', null)
-    }
   }
 
   /**
@@ -424,16 +603,19 @@ class VolumeViewer {
 
     // Add behaviour, when volume is selected, change the volume viewer property
     this.doseSelector.on('change', function () {
-      if (this.value === -1) {
+      if (parseInt(this.value) === -1) {
         // If the base text is chosen, remove dose volume if loaded
         volumeViewer.removeDoseVolume()
+        // Disable the dose comparison drop down
+        volumeViewer.doseComparisonSelector.node().value = '-1'
+        volumeViewer.doseComparisonSelector.node().disabled = true
       } else {
         volumeViewer.setDoseVolume(doseVolumeList[this.value])
       }
     })
 
     this.densitySelector.on('change', function () {
-      if (this.value === -1) {
+      if (parseInt(this.value) === -1) {
         volumeViewer.removeDensityVolume()
       } else {
         volumeViewer.setDensityVolume(densityVolumeList[this.value])
@@ -442,7 +624,7 @@ class VolumeViewer {
 
     this.doseComparisonSelector.on('change', function () {
       if (volumeViewer.doseVolume) {
-        if (this.value === -1) {
+        if (parseInt(this.value) === -1) {
           // If the base text is chosen, remove density volume if loaded
           const volIndex = parseInt(
             volumeViewerList[0].doseSelector.node().value
@@ -452,7 +634,7 @@ class VolumeViewer {
           } else {
             volumeViewer.removeDoseVolume()
           }
-        } else if (volumeViewer.doseVolume === doseVolumeList[this.value]) {
+        } else if (volumeViewer.doseSelector.node().value === this.value) {
           console.log(
             'Select a different dose volume than one that is already loaded'
           )
@@ -472,50 +654,21 @@ class VolumeViewer {
    * @param {DoseVolume} doseVol1 The first dose volume to compare.
    * @param {DoseVolume} doseVol2 The second dose volume to compare.
    */
-  // TODO: Move this logic to DoseComparisonVolume class
   makeDoseComparison (doseVol1, doseVol2) {
-    // First normalize the dose data to turn into a percentage
-    const doseArr1 = doseVol1.data.dose.map(
-      (doseVal) => doseVal / doseVol1.data.maxDose
-    )
-    const doseArr2 = doseVol2.data.dose.map(
-      (doseVal) => doseVal / doseVol2.data.maxDose
-    )
-
-    // Take the difference
-    const doseDiff = new Array(doseArr1.length)
-    for (let i = 0; i < doseArr1.length; i++) {
-      if (doseArr1[i] || doseArr2[i]) {
-        doseDiff[i] = (doseArr1[i] || 0) - (doseArr2[i] || 0)
-      }
-    }
-    // Calculate the error for each
-    const errArr2 = doseVol2.data.error
-    const error = doseVol1.data.error.map((err1, i) =>
-      Math.sqrt(err1 * err1 + errArr2[i] * errArr2[i])
-    )
-
-    // Make new volume
-    const newData = {
-      ...doseVol1.data,
-      dose: doseDiff,
-      error: error,
-      maxDose: 1.0
-    }
-
     const combinedFileName = doseVol1.fileName + '_' + doseVol2.fileName
 
     const doseComparisonVol = new DoseComparisonVolume(
       combinedFileName,
       this.mainViewerDimensions,
       this.legendDimensions,
-      newData
+      doseVol1,
+      doseVol2
     )
 
     doseComparisonVolumeList.push(doseComparisonVol)
 
     // Set dose to new difference volume
-    this.setDoseVolume(doseComparisonVol)
+    this.setDoseComparisonVolume(doseComparisonVol)
   }
 
   /**
@@ -561,16 +714,132 @@ class VolumeViewer {
     // Set up the file selector dropdowns
     this.setUpFileSelectors()
 
+    // Put the checkboxes, buttons, and sliders in the option holder div
+    const optionHolder = this.volHolder.append('div').attr('class', 'option-holder')
+
+    // Add checkboxes for voxel information and dose profile plots
+    const checkboxHolder = optionHolder.append('div').attr('class', 'option')
+    const addCheckbox = (id, value, label, onChangeFunc) => {
+      const checkboxDiv = checkboxHolder.append('div').attr('class', 'checkbox').classed('hidden', true)
+      const checkbox = checkboxDiv.append('input')
+        .attr('type', 'checkbox')
+        .attr('id', id)
+        .attr('name', id)
+        .attr('value', value)
+        .attr('disabled', 'disabled')
+
+      checkboxDiv.append('label')
+        .attr('for', id)
+        .text(label)
+
+      checkbox.on('change', () => onChangeFunc(this, checkbox.node()))
+      return checkbox
+    }
+
+    // Add checkbox and input boxes for dose normalization
+    this.normalizeDoseCheckbox = addCheckbox('normalize-dose-checkbox' + this.id, 'NormDose', 'Normalize dose file?',
+      defineNormalizeDoseCheckboxBehaviour)
+
+    const parentNode = d3.select(this.normalizeDoseCheckbox.node().parentNode)
+
+    const volViewer = this
+
+    // Add number input box
+    this.doseNormValInput = parentNode
+      .append('span')
+      .attr('class', 'dose-norm')
+
+    this.doseNormValInput.append('input')
+      .attr('type', 'number')
+      .attr('name', 'add-dose-val-norm')
+      .attr('id', 'add-dose-val-norm')
+      .attr('step', 1)
+      .style('width', 45 + 'px')
+      .attr('disabled', 'disabled').on('change', function () {
+        const doseNormVal = parseFloat(this.value) * 100 // Convert from cGy to Gy
+        const doseNormPercent = parseFloat(volViewer.doseNormPercentInput.select('input').node().value) / 100 // Convert from percent to decimal
+
+        if (doseNormPercent) volViewer.normalizeDoseValues(doseNormVal, doseNormPercent)
+      })
+
+    this.doseNormValInput.append('label')
+      .attr('for', 'add-dose-val-norm')
+      .text(' cGy ')
+
+    // Add number input box
+    this.doseNormPercentInput = parentNode
+      .append('span')
+      .attr('class', 'dose-norm')
+
+    this.doseNormPercentInput
+      .append('input')
+      .attr('type', 'number')
+      .attr('name', 'add-dose-percent-norm')
+      .attr('id', 'add-dose-percent-norm')
+      .attr('step', 1)
+      .style('width', 45 + 'px')
+      .attr('disabled', 'disabled').on('change', function () {
+        const doseNormVal = parseFloat(volViewer.doseNormValInput.select('input').node().value) * 100 // Convert from cGy to Gy
+        const doseNormPercent = parseFloat(this.value) / 100 // Convert from percent to decimal
+
+        if (doseNormVal) volViewer.normalizeDoseValues(doseNormVal, doseNormPercent)
+      })
+
+    this.doseNormPercentInput.append('label')
+      .attr('for', 'add-dose-percent-norm')
+      .text(' % ')
+
+    this.showVoxelInfoCheckbox = addCheckbox('show-marker-checkbox' + this.id, 'ShowMarker', 'Show voxel information on click?',
+      defineShowMarkerCheckboxBehaviour)
+    this.showDoseProfileCheckbox = addCheckbox('show-dose-profile-checkbox' + this.id, 'ShowDoseProfile',
+      'Plot dose profile at crosshairs?', defineShowProfileCheckboxBehaviour)
+    this.showROIOutlinesCheckbox = addCheckbox('show-roi-outlines-checkbox' + this.id, 'ShowROIOutlines',
+      'Show ROI contours?', defineShowROICheckboxBehaviour)
+    this.showDVHCheckbox = addCheckbox('show-dvh-checkbox' + this.id, 'ShowDVH',
+      'Show DVH?', defineShowDVHCheckboxBehaviour)
+
+    if (structureSetVolumeList.length > 0) {
+      this.enableCheckbox(this.showROIOutlinesCheckbox)
+      if (this.isDVHAllowed()) this.enableCheckbox(this.showDVHCheckbox)
+    }
+
+    // Add buttons to export visualization and export to csv
+    const buttonHolder = optionHolder.append('div').attr('class', 'option')
+    const addButtons = (id, label, onClickFunc) => {
+      const button = buttonHolder.append('button')
+        .attr('id', id)
+        .attr('class', 'button-text')
+        .attr('disabled', 'disabled')
+        .text(label)
+
+      button.on('click', () => onClickFunc(this))
+      return button
+    }
+
+    this.saveVisButton = addButtons('save-vis', 'Export visualization to PNG', defineExportPNGButtonBehaviour)
+    this.saveDoseProfileButton = addButtons('save-dose-profile', 'Export dose profiles to CSV', defineExportDoseProfileCSVButtonBehaviour)
+    this.saveDVHButton = addButtons('save-dvh', 'Export DVH to CSV', defineExportDVHToCSVButtonBehaviour)
+
     // Add min and max density sliders
-    this.minParentDiv = this.volHolder
+    const minMaxSliderHolder = optionHolder.append('div').attr('class', 'option')
+    this.minParentDiv = minMaxSliderHolder
       .append('div')
       .attr('class', 'min-max-container')
-    this.maxParentDiv = this.volHolder
+    this.maxParentDiv = minMaxSliderHolder
       .append('div')
       .attr('class', 'min-max-container')
 
+    // Add max dose and dose comparison normalization sliders
+    const doseOptionsSliderHolder = optionHolder.append('div').attr('class', 'option')
+    this.maxDoseParentDiv = doseOptionsSliderHolder
+      .append('div')
+      .attr('id', 'max-dose-slider-container')
+    this.doseCompNormParentDiv = doseOptionsSliderHolder
+      .append('div')
+      .attr('id', 'dose-comp-norm-slider-container')
+
     // Add voxel information
-    buildVoxelInfoHtml(this.volHolder, id)
+    this.voxelInfoDiv = buildVoxelInfoHtml(this.volHolder, id)
 
     // Append div to hold the panels
     this.viewerContainer = this.volHolder
@@ -614,8 +883,6 @@ class VolumeViewer {
       xz: {}
     }
 
-    const dispatch = this.dispatch
-
     // Add html for panels and slice sliders
     AXES.forEach((axis, i) => {
       const selectedDiv = this.viewerContainer
@@ -627,15 +894,56 @@ class VolumeViewer {
       var onSliceChangeCallback = (sliderVal) => {
         const currPanel = this.panels[axis]
         // Update slice of current panel
-        currPanel.updateSlice(parseInt(sliderVal))
+        this.updateSlice(axis, parseInt(sliderVal) - 1)
 
         // TODO: Fix this, bug after zooming/translating and changing slice
         // Update marker position, voxel information and dose profile
         const plotCoords = currPanel.markerPosition
-        if (plotCoords) {
-          dispatch.call('markerchange', this, {
-            plotCoords: plotCoords,
-            panel: currPanel
+        if (currPanel.showMarker()) {
+          // ISSUE HERE: don't need to redraw other panels on slider change,
+          // just marker position and voxel info
+          const voxelCoords = coordsToVoxel(
+            plotCoords,
+            currPanel.axis,
+            currPanel.densitySliceNum || currPanel.doseSliceNum,
+            currPanel.volume,
+            currPanel.zoomTransform
+          )
+
+          // Update voxel info
+          const worldCoords = currPanel.coordsToWorld(plotCoords)
+          this.updateVoxelInfo(worldCoords)
+
+          Object.values(this.panels).forEach((panel) => {
+            if (panel.axis !== currPanel.axis) {
+              let voxelNums
+              if (panel.axis === 'xy') {
+                voxelNums = [voxelCoords[0], voxelCoords[1]]
+              } else if (panel.axis === 'yz') {
+                voxelNums = [voxelCoords[1], voxelCoords[2]]
+              } else {
+                voxelNums = [voxelCoords[0], voxelCoords[2]]
+              }
+
+              // Convert voxel number to pixel value for both x and y coordinates
+              const xScale = panel.volume.baseSlices[panel.axis].xPixelToVoxelScale.invertExtent
+              const yScale = panel.volume.baseSlices[panel.axis].yPixelToVoxelScale.invertExtent
+
+              let coords
+              if (panel.zoomTransform) {
+                coords = panel.zoomTransform.apply([
+                  Math.ceil(xScale(voxelNums[0]).reduce((total, num) => total + num) / 2),
+                  Math.ceil(yScale(voxelNums[1]).reduce((total, num) => total + num) / 2)
+                ])
+              } else {
+                coords = [
+                  Math.ceil(xScale(voxelNums[0]).reduce((total, num) => total + num) / 2),
+                  Math.ceil(yScale(voxelNums[1]).reduce((total, num) => total + num) / 2)
+                ]
+              }
+
+              panel.updateMarker(coords, false)
+            }
           })
         }
       }
@@ -645,7 +953,7 @@ class VolumeViewer {
         label: 'Slice Number',
         format: d3.format('d'),
         startingVal: 0,
-        minVal: 0,
+        minVal: 1,
         maxVal: 1,
         step: 1,
         margin: {
@@ -667,7 +975,7 @@ class VolumeViewer {
       // Build div to hold the panel
       const imageHolder = selectedDiv
         .append('div')
-        .classed('imageholder-' + axis, true)
+        .classed('image-holder-' + axis, true)
         .classed('parent', true)
 
       classes.forEach((className, i) => {
@@ -695,6 +1003,12 @@ class VolumeViewer {
         this.id + '-' + dimensions[i]
       )
     })
+
+    const selectedDiv = this.viewerContainer.append('div')
+    this.DVH = new DoseVolumeHistogram(this.sideDoseProfileDimensions,
+      selectedDiv,
+      this.id,
+      this)
   }
 
   /**
@@ -704,7 +1018,7 @@ class VolumeViewer {
    */
   buildLegend (legendDimensions) {
     // Set up legends
-    var getLegendHolderAndSvg = (className) => {
+    var getLegendHolderAndSvg = (className, legendDimensions) => {
       const legendHolder = this.legendHolder
         .append('span')
         .attr('id', className + '-legend-holder')
@@ -718,12 +1032,11 @@ class VolumeViewer {
         .attr('class', 'legend')
 
       return [legendHolder, legendSvg]
-    };
-
-    [this.doseLegendHolder, this.doseLegendSvg] = getLegendHolderAndSvg('dose');
-    [this.densityLegendHolder, this.densityLegendSvg] = getLegendHolderAndSvg(
-      'density'
-    )
+    }
+    const roiLegendDimensions = { ...legendDimensions, fullWidth: 180, width: 180 - legendDimensions.margin.left - legendDimensions.margin.right };
+    [this.doseLegendHolder, this.doseLegendSvg] = getLegendHolderAndSvg('dose', legendDimensions);
+    [this.densityLegendHolder, this.densityLegendSvg] = getLegendHolderAndSvg('density', legendDimensions);
+    [this.ROILegendHolder, this.ROILegendSvg] = getLegendHolderAndSvg('roi', roiLegendDimensions)
   }
 
   /**
@@ -742,6 +1055,8 @@ class VolumeViewer {
           axis,
           this.axisObjs[axis],
           this.sliceSliders[axis],
+          this.showVoxelInfoCheckbox,
+          this.showDoseProfileCheckbox,
           this.dispatch,
           this.id
         )
@@ -753,8 +1068,9 @@ class VolumeViewer {
    * Set up the event dispatcher.
    */
   initializeDispatch () {
-    // Set up marker coord change event
+    // Set up marker coordinate change event
     const panels = this.panels
+    const volumeViewer = this
 
     this.dispatch.on('markerchange.panels', function (d) {
       d.panel.updateMarker(d.plotCoords)
@@ -763,7 +1079,7 @@ class VolumeViewer {
       const voxelCoords = coordsToVoxel(
         d.plotCoords,
         d.panel.axis,
-        d.panel.sliceNum,
+        d.panel.densitySliceNum || d.panel.doseSliceNum,
         d.panel.volume,
         d.panel.zoomTransform
       )
@@ -783,8 +1099,8 @@ class VolumeViewer {
           }
 
           // Convert voxel number to pixel value for both x and y coordinates
-          const xScale = panel.volume.prevSlice[panel.axis].xPixelToVoxelScale.invertExtent
-          const yScale = panel.volume.prevSlice[panel.axis].yPixelToVoxelScale.invertExtent
+          const xScale = panel.volume.baseSlices[panel.axis].xPixelToVoxelScale.invertExtent
+          const yScale = panel.volume.baseSlices[panel.axis].yPixelToVoxelScale.invertExtent
 
           let coords
 
@@ -801,7 +1117,7 @@ class VolumeViewer {
           }
 
           panel.updateMarker(coords, false)
-          panel.updateSlice(sliceNum)
+          volumeViewer.updateSlice(panel.axis, sliceNum)
           panel.updateSlider(sliceNum)
         }
       })
@@ -813,10 +1129,606 @@ class VolumeViewer {
         d.panel.densityVol,
         d.panel.doseVol,
         worldCoords,
-        d.panel.volumeViewerId
+        d.panel.volumeViewerId,
+        d.panel.showMarker,
+        d.panel.showDoseProfile
       )
     })
   }
+
+  /**
+   * Generic function to enable the checkbox and remove the hidden class.
+   *
+   * @param {Object} checkbox The checkbox to enable.
+   */
+  enableCheckbox (checkbox) {
+    if (checkbox.node().disabled) checkbox.node().disabled = false
+    const parentNode = d3.select(checkbox.node().parentNode)
+    parentNode.classed('hidden', false)
+  }
+
+  /**
+   * Generic function to disable the checkbox and add the hidden class.
+   *
+   * @param {Object} checkbox The checkbox to disable.
+   */
+  disableCheckbox (checkbox) {
+    if (!checkbox.node().disabled) checkbox.node().disabled = true
+    const parentNode = d3.select(checkbox.node().parentNode)
+    parentNode.classed('hidden', true)
+  }
+
+  /**
+   * Sets the maximum density value for density plots.
+   *
+   * @param {number} maxDensityVal The maximum density value.
+   */
+  setMaxDensityVar (maxDensityVal) {
+    this.maxDensityVar = parseFloat(maxDensityVal)
+
+    // Redraw legend
+    this.initializeDensityLegend(this.minDensityVar, this.maxDensityVar)
+
+    Object.values(this.panels).forEach((panel) => {
+      panel.prevSliceImg = this.densityVolume.drawDensity(this.densityVolume.sliceCache[panel.axis][panel.densitySliceNum],
+        panel.zoomTransform, panel.axisElements['plot-density'], this.minDensityVar, this.maxDensityVar)
+    })
+  }
+
+  /**
+   * Sets the minimum density value for density plots.
+   *
+   * @param {number} minDensityVal The minimum density value.
+   */
+  setMinDensityVar (minDensityVal) {
+    this.minDensityVar = parseFloat(minDensityVal)
+
+    // Redraw legend
+    this.initializeDensityLegend(this.minDensityVar, this.maxDensityVar)
+
+    Object.values(this.panels).forEach((panel) => {
+      panel.prevSliceImg = this.densityVolume.drawDensity(this.densityVolume.sliceCache[panel.axis][panel.densitySliceNum],
+        panel.zoomTransform, panel.axisElements['plot-density'], this.minDensityVar, this.maxDensityVar)
+    })
+  }
+
+  /**
+   * Sets the maximum dose value for dose contour plots.
+   *
+   * @param {number} val The maximum dose percentage.
+   */
+  setMaxDose (val) {
+    this.maxDoseVar = val * this.doseVolume.data.maxDose
+    // Update the colour scheme and thresholds with the new max dose variable
+    this.doseVolume.addColourScheme(d3.interpolateViridis, this.maxDoseVar, this.minDoseVar)
+    this.updateThresholds()
+
+    Object.values(this.panels).forEach((panel, i) => {
+      this.doseVolume.drawDose(this.doseVolume.sliceCache[panel.axis][panel.doseSliceNum], panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+      if (panel.showDoseProfile()) {
+        // Update dose profile
+        this.doseProfileList[i].minDoseVar = this.minDoseVar
+        this.doseProfileList[i].maxDoseVar = this.maxDoseVar
+        this.doseProfileList[i].plotData()
+      }
+    })
+  }
+
+  /**
+   * Normalize DICOM or 3ddose files to the given values.
+   *
+   * @param {number} val      The dose in cGy.
+   * @param {number} percent  The percent dose.
+   */
+  // TODO: Get this working
+  normalizeDoseValues (val, percent) {
+    // Calculate dose normalization factor
+    const maxDose = this.doseVolume.data.maxDose
+    this.doseNorm = (val / percent) / maxDose
+
+    // Show DVH checkbox
+    if (this.isDVHAllowed()) this.enableCheckbox(this.showDVHCheckbox)
+
+    // Update dose volume histogram
+    if (this.showDVHCheckbox.node().checked) {
+      this.DVH.plotDVH(this.doseNorm)
+    }
+
+    // if (this.doseVolume instanceof DoseComparisonVolume) {
+    //   ...
+    // } else if {
+    //   ...
+    // }
+  }
+
+  /**
+   * Initialize the thresholds for the dose contour plots.
+   *
+   * @param {number} min The minimum threshold value.
+   * @param {number} max The maximum threshold value.
+   * @param {number} contourInt The interval between each threshold.
+   */
+  initializeThresholds (min = 0.0, max = 1.0, contourInt = 0.1) {
+    // Calculate the contour thresholds
+    this.thresholdPercents = d3.range(min + contourInt, max + contourInt, contourInt)
+    this.updateThresholds()
+    // The className function multiplies by 1000 and rounds because decimals are not allowed in class names
+    this.className = (i) =>
+      'col-' + this.id + '-' + d3.format('d')(this.thresholdPercents[i] * 1000)
+  }
+
+  /**
+   * Updates the threshold values used for creating the dose contours.
+   */
+  updateThresholds () {
+    this.thresholds = this.thresholdPercents.map((i) => i * this.maxDoseVar)
+  }
+
+  /**
+   * Add a new threshold value to create a new contour in the dose contour plots.
+   *
+   * @param {number} thresholdPercent The dose percentage to add.
+   */
+  addThresholdPercent (thresholdPercent) {
+    this.thresholdPercents.push(thresholdPercent)
+    this.thresholdPercents.sort()
+    this.updateThresholds()
+    this.initializeDoseLegend(this.thresholds, this.minDoseVar, this.maxDoseVar)
+
+    Object.values(this.panels).forEach((panel) => {
+      this.doseVolume.drawDose(this.doseVolume.sliceCache[panel.axis][panel.doseSliceNum], panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+    })
+  }
+
+  /**
+   * Add a colour legend with a toggle function to turn on and off labels on the
+   * plot.
+   *
+   * @param {number} params An object that hold the legendSvg, legendClass,
+   * baseClassName, svgList, legendTitle, labels, cells, colourFcn, and
+   * ascending properties
+   */
+  initializeColourLegend (params) {
+    const toggleContour = (className) => {
+      params.svgList.forEach((svg) => {
+        svg.selectAll('path.' + params.baseClassName + className)
+          .classed('hidden', function () {
+            return !d3.select(this).classed('hidden')
+          })
+      })
+    }
+
+    const hiddenClassList = this.getHiddenClassList(params.legendSvg)
+
+    const parameters = {
+      labels: [params.labels],
+      cells: [params.cells],
+      on: [
+        'cellclick',
+        function (d) {
+          const legendCell = d3.select(this)
+          toggleContour(legendCell.attr('class').split(' ')[1])
+          legendCell.classed('hidden', !legendCell.classed('hidden'))
+        }
+      ]
+    }
+
+    // Clear and redraw current legend
+    params.legendSvg.select('.' + params.legendClass).remove()
+    params.legendSvg.select('text').remove()
+
+    // Make space for legend title
+    params.legendSvg
+      .append('g')
+      .attr('class', params.legendClass)
+      .style('transform', 'translate(0px,' + 20 + 'px)')
+
+    // Append title
+    params.legendSvg
+      .append('text')
+      .attr('class', params.legendClass)
+      .attr('x', this.legendDimensions.width / 2)
+      .attr('y', this.legendDimensions.margin.top / 2)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '14px')
+      .text(params.legendTitle)
+
+    // Create legend
+    var legend = d3
+      .legendColor()
+      .shapeWidth(10)
+      .ascending(params.ascending)
+      .orient('vertical')
+      .scale(params.colourFcn)
+
+    // Apply all the parameters
+    Object.entries(parameters).forEach(([name, val]) => {
+      legend[name](...val)
+    })
+
+    params.legendSvg.select('.' + params.legendClass).call(legend)
+
+    // Set the height of the svg so the div can scroll if need be
+    const height =
+      params.legendSvg
+        .select('.' + params.legendClass)
+        .node()
+        .getBoundingClientRect().height + 20
+    params.legendSvg.attr('height', height)
+
+    // Add the appropriate classnames to each legend cell
+    params.legendSvg
+      .selectAll('g.cell')
+      .attr('class', (d, i) => 'cell ' + params.classNames[i])
+
+    if (hiddenClassList.length > 0) {
+      // Apply hidden class to hidden contours
+      const hiddenLegendCells = params.legendSvg
+        .selectAll('g.cell')
+        .filter(hiddenClassList.join(','))
+      hiddenLegendCells.classed('hidden', !hiddenLegendCells.classed('hidden'))
+    }
+  }
+
+  /**
+  * Create the structure set legend.
+  *
+  * @param {StructureSetVolume} structureSetVolume The structure set volume to
+  * create the legend with
+  */
+  initializeStructureSetLegend (structureSetVolume) {
+    const toCSSClass = (className) => className.replace(/[|~ ! @ $ % ^ & * ( ) + = , . / ' ; : " ? > < \[ \] \ \{ \} | ]/g, '') // eslint-disable-line no-useless-escape
+    const colours = structureSetVolume.ROIOutlines.map((ROIOutline) => d3.color(ROIOutline.colour))
+    const labels = structureSetVolume.ROIOutlines.map((ROIOutline) => ROIOutline.label)
+    const svgList = Object.values(this.svgObjs['plot-dose'])
+    svgList.push(this.DVH.svg)
+
+    // Define variables
+    const structureSetLegendParams = {
+      legendSvg: this.ROILegendSvg,
+      legendClass: 'ROILegend',
+      baseClassName: 'roi-outline.',
+      svgList: svgList,
+      legendTitle: 'ROIs',
+      labels: labels,
+      cells: labels,
+      colourFcn: d3.scaleOrdinal().domain(labels).range(colours),
+      ascending: false,
+      classNames: labels.map((label) => toCSSClass(label))
+    }
+
+    this.initializeColourLegend(structureSetLegendParams)
+  }
+
+  /**
+  * Create the dose legend.
+  *
+  * @param {number[]} thresholds The contour thresholds.
+  * @param {number} minDoseVar The minimum dose to scale the contours with.
+  * @param {number} maxDoseVar The maximum dose to scale the contours with.
+  */
+  initializeDoseLegend (thresholds, minDoseVar = 0, maxDoseVar = this.doseVolume.data.maxDose) {
+    // Define variables
+    const classNames = this.thresholds.map((threshold, i) => this.className(this.thresholds.length - 1 - i))
+    const doseLegendParams = {
+      legendSvg: this.doseLegendSvg,
+      legendClass: 'doseLegend',
+      baseClassName: 'contour-path.',
+      svgList: Object.values(this.svgObjs['plot-dose']),
+      legendTitle: 'Dose',
+      labels: this.thresholds.map((e) => d3.format('.0%')(e / maxDoseVar)),
+      cells: this.thresholds,
+      colourFcn: d3.scaleSequentialSqrt(d3.interpolateViridis).domain([minDoseVar, maxDoseVar]),
+      ascending: true,
+      classNames: classNames
+    }
+
+    // Get list of class names of hidden contours
+
+    this.initializeColourLegend(doseLegendParams)
+  }
+
+  /**
+   * Create the input box to add new dose contour thresholds.
+   */
+  initializeDoseContourInput () {
+    const legendHolder = this.doseLegendHolder
+    var addNewThresholdPercent = () => {
+      const val = parseFloat(submitDoseContour.node().value)
+      const newPercentage = val / 100.0
+      if (!Number.isNaN(newPercentage)) {
+        // Check if valid or if percentage already exists
+        if (
+          val < 0 ||
+          val > 100 ||
+          !Number.isInteger(val) ||
+          this.thresholdPercents.includes(newPercentage)
+        ) {
+          console.log('Invalid value or value already exists on plot')
+          // Flash the submit box red
+          submitDoseContour
+            .transition()
+            .duration(200)
+            .style('background-color', 'red')
+            .transition()
+            .duration(300)
+            .style('background-color', 'white')
+        } else {
+          this.addThresholdPercent(newPercentage)
+        }
+      }
+    }
+
+    // Remove existing dose contour inputs
+    legendHolder.selectAll('input').remove()
+
+    const doseContourInputWidth = 45
+
+    // Add number input box
+    const submitDoseContour = legendHolder
+      .append('input')
+      .attr('type', 'number')
+      .attr('name', 'add-dose-contour-line')
+      .attr('id', 'add-dose-contour-line')
+      .attr('min', 0)
+      .attr('max', 100)
+      .attr('step', 1)
+      .style('width', doseContourInputWidth + 'px')
+
+    // Add submit button
+    legendHolder
+      .append('input')
+      .attr('type', 'submit')
+      .attr('name', 'submit-dose-contour-line')
+      .attr('id', 'submit-dose-contour-line')
+      .attr('value', '+')
+      .on('click', addNewThresholdPercent)
+  }
+
+  /**
+   * Create the density legend.
+   *
+   * @param {number} minDensityVar The minimum density to scale the image with.
+   * @param {number} maxDensityVar The maximum density to scale the image with.
+   */
+  initializeDensityLegend (minDensityVar = this.minDensityVar, maxDensityVar = this.maxDensityVar) {
+    const legendClass = 'densityLegend'
+    const title = 'Density'
+    const dims = this.legendDimensions
+    const colourMap = d3.scaleSqrt().domain([minDensityVar, maxDensityVar]).range([0, 255])
+
+    function gradientUrl (colour, height, width, n = 150) {
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+      const [minVal, maxVal] = colour.domain()
+      var val
+      for (let i = 0; i < height; ++i) {
+        val = colour(((n - i) / n) * (maxVal - minVal) + minVal)
+        context.fillStyle = 'black'
+        context.fillRect(0, i, 1, 1)
+        context.fillStyle = 'rgb(' + val + ', ' + val + ', ' + val + ')'
+        context.fillRect(1, i, width - 1, 1)
+      }
+      return canvas.toDataURL()
+    }
+
+    // Remove old data
+    this.densityLegendSvg.selectAll('*').remove()
+
+    // Set dimensions of svg
+    this.densityLegendSvg
+      .attr('width', dims.width)
+      .attr('height', dims.height)
+      .attr('viewBox', [0, 0, dims.width, dims.height])
+      .style('overflow', 'visible')
+      .style('display', 'block')
+
+    // Define parameters for ticks
+    const ticks = 4
+    const n = Math.round(ticks + 1)
+    const tickValues = d3
+      .range(n)
+      .map((i) => d3.quantile(colourMap.domain(), i / (n - 1)))
+    const tickFormat = maxDensityVar > 10 ? d3.format('d') : d3.format('.2f')
+    const tickSize = 15
+
+    const gradUrl = gradientUrl(
+      colourMap,
+      dims.height - 20,
+      30
+    )
+
+    // Set height of legend
+    const legendHeight = dims.height - 80
+
+    // Create scale for ticks
+    const scale = d3
+      .scaleLinear()
+      .domain([minDensityVar, maxDensityVar])
+      .range([legendHeight, 0])
+
+    // Append title
+    this.densityLegendSvg
+      .append('text')
+      .attr('class', legendClass)
+      .attr('x', dims.width / 2)
+      .attr('y', dims.margin.top / 2)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '14px')
+      .text(title)
+
+    // Append gradient image
+    this.densityLegendSvg
+      .append('g')
+      .attr('class', legendClass)
+      .append('image')
+      .attr('y', dims.margin.top)
+      .attr('width', dims.width)
+      .attr('height', legendHeight)
+      .attr('preserveAspectRatio', 'none')
+      .attr('xlink:href', gradUrl)
+
+    // Append ticks
+    this.densityLegendSvg
+      .append('g')
+      .attr('transform', 'translate(' + 0 + ', ' + dims.margin.top + ')')
+      .classed('label', true)
+      .call(
+        d3
+          .axisRight()
+          .ticks(ticks, tickFormat)
+          .tickFormat(tickFormat)
+          .tickSize(tickSize)
+          .tickValues(tickValues)
+          .scale(scale)
+      )
+  }
+
+  /**
+  * Change the slice of the loaded volumes in the panel.
+  *
+  * @param {string} axis The axis of the current panel.
+  * @param {number} sliceNum The number of the current slice displayed in the panel.
+  */
+  updateSlice (axis, sliceNum) {
+    const panel = this.panels[axis]
+    let slicePos, slice
+
+    if (this.densityVolume) {
+      slicePos = this.densityVolume.baseSlices[axis].zScale.invert(sliceNum)
+      slice = this.densityVolume.getSlice(axis, slicePos)
+      panel.prevSliceImg = this.densityVolume.drawDensity(slice, panel.zoomTransform, panel.axisElements['plot-density'], this.minDensityVar, this.maxDensityVar)
+      panel.densitySliceNum = sliceNum
+    }
+    if (this.doseVolume) {
+      slicePos = slicePos || this.doseVolume.baseSlices[axis].zScale.invert(sliceNum)
+      slice = this.doseVolume.getSlice(axis, slicePos)
+      this.doseVolume.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+      panel.doseSliceNum = slice.sliceNum
+    }
+
+    if ((this.densityVolume || this.doseVolume) && this.structureSetVolume) {
+    // Get list of class names of hidden contours
+      const hiddenROIClassList = this.getHiddenClassList(this.ROILegendSvg)
+      this.structureSetVolume.plotStructureSet(axis, slicePos, panel.axisElements['plot-dose'], this.densityVolume || this.doseVolume, panel.zoomTransform, hiddenROIClassList)
+    }
+
+    panel.slicePos = slicePos
+  }
+
+  /**
+  * Set the dose volume of the VolumeViewer.
+  *
+  * @param {DoseVolume} doseVol The dose volume to be set.
+  */
+  setDoseComparisonVolume (doseVol) {
+    this.doseVolume = doseVol
+
+    // Set the max dose variable
+    this.maxDoseVar = parseFloat(doseVol.data.maxDose)
+    this.minDoseVar = -1.0
+    this.initializeThresholds(-1.2, 1.0, 0.2)
+
+    // Set dose volume html elements
+    doseVol.setHtmlObjects(
+      this.svgObjs['plot-dose'],
+      this.doseLegendHolder,
+      this.doseLegendSvg
+    )
+
+    this.initializeDoseLegend(this.thresholds, this.minDoseVar, this.maxDoseVar)
+    this.initializeDoseContourInput()
+
+    const dims = 'zxy'
+    var sliceNum, slicePos
+
+    // Get the average of items at index i and i+1
+    const getPos = (arr, i) => (arr[i] + arr[i + 1]) / 2.0
+
+    // Set the panel doseVolume object
+    Object.values(this.panels).forEach((panel, i) => {
+      // Get the slice position
+      slicePos = panel.densityVol
+        ? panel.slicePos
+        : getPos(doseVol.data.voxelArr[dims[i]], Math.floor(doseVol.data.voxelNumber[dims[i]] / 2))
+
+      // Set the dose volume in the panel
+      panel.setDoseVolume(doseVol, slicePos)
+
+      if (!panel.densityVol) {
+        // Update the slider max values
+        sliceNum = Math.round(doseVol.baseSlices[panel.axis].zScale(slicePos))
+        this.sliceSliders[panel.axis].setMaxValue(doseVol.data.voxelNumber[dims[i]])
+        this.sliceSliders[panel.axis].setCurrentValue(sliceNum)
+
+        // Draw the slice
+        const slice = doseVol.getSlice(panel.axis, slicePos)
+        doseVol.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+
+        // Update the axis
+        this.drawAxes(
+          panel.zoomTransform,
+          this.svgObjs['axis-svg'][panel.axis],
+          slice
+        )
+      } else {
+        // Draw the slice
+        const slice = doseVol.getSlice(panel.axis, slicePos)
+        doseVol.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+      }
+    })
+
+    // Update the voxel info
+    if (this.worldCoords) this.updateVoxelInfo(this.worldCoords)
+
+    if (this.densityVolume) {
+      enableCheckboxForDensityPlot()
+    }
+    enableButton(this.saveVisButton)
+    this.enableCheckbox(this.showDoseProfileCheckbox)
+    this.enableCheckbox(this.showVoxelInfoCheckbox)
+    this.enableCheckbox(this.normalizeDoseCheckbox)
+    initializeMaxDoseSlider(this.maxDoseParentDiv, doseVol, this)
+    initializeDoseCompNormSlider(this.doseCompNormParentDiv, doseVol, this)
+  }
+
+  /**
+  * Normalize the second dose volume data and recalculate the dose comparison.
+  *
+  * @param {number} normVal The value to normalize the second volume with.
+  */
+  setDoseComparisonNormFactor (normVal) {
+    // Calculate the adjusted dose comparison data
+    this.doseVolume.normalizeDose(normVal)
+
+    // Redraw dose contours
+    Object.values(this.panels).forEach((panel, i) => {
+      const slice = this.doseVolume.getSlice(panel.axis, panel.slicePos)
+      this.doseVolume.drawDose(slice, panel.zoomTransform, panel.axisElements['plot-dose'], this.thresholds, this.className, this.minDoseVar, this.maxDoseVar)
+    })
+  }
+
+  /**
+  * Update the voxel information in the volume viewer.
+  *
+  * @param {number[]} worldCoords The world coordinates of the data.
+  */
+  updateVoxelInfo (worldCoords) {
+    if (this.showDoseProfileCheckbox.node().checked || this.showVoxelInfoCheckbox.node().checked) {
+      // Only choose first panel because it will update all dose profiles
+      if (worldCoords) {
+        const panel = this.panels.xy
+        updateVoxelCoords(
+          panel.densityVol,
+          panel.doseVol,
+          worldCoords,
+          this.id,
+          panel.showMarker,
+          panel.showDoseProfile
+        )
+      }
+    }
+  }
 }
 
-export { VolumeViewer }
+// export { VolumeViewer }
